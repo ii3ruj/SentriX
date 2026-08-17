@@ -11,6 +11,9 @@ import {
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
+
 /*
 |--------------------------------------------------------------------------
 | Temporary CRSI Summary Fallback
@@ -122,6 +125,15 @@ function getGeneratedReports() {
 |--------------------------------------------------------------------------
 */
 function downloadReport(report) {
+  // تقارير الحوادث لها PDF رسمي مولّد ومؤرشف في الباك إند
+  if (!report.isCrsi && report.incidentId) {
+    window.open(
+      `${API_BASE}/api/archive/${report.incidentId}/download`,
+      "_blank"
+    );
+    return;
+  }
+
   let lines;
 
   if (report.isCrsi) {
@@ -247,14 +259,41 @@ export default function Archive() {
     };
   }, []);
 
-  const generatedReports = getGeneratedReports();
-  const allReports = [...generatedReports, ...reportsList];
+  // الأرشيف مصدره الباك إند وحده (P2: Write-Once) — لا سجلات محلية
+  const allReports = reportsList;
 
-  const handleVerify = (id) => {
-    setVerifiedId(id);
-    setTimeout(() => {
-      setVerifiedId(null);
-    }, 3500);
+  const handleVerify = async (report) => {
+    // بلا حادثة مرتبطة لا يوجد سجل أرشيف في الباك إند للتحقق منه
+    if (!report.incidentId) {
+      setVerifiedId(report.id);
+      setTimeout(() => setVerifiedId(null), 3500);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/archive/verify/${report.incidentId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        }
+      );
+      const data = await res.json();
+      if (data.integrity_ok) {
+        setVerifiedId(report.id);
+      } else {
+        window.alert(
+          `Integrity check FAILED for ${report.id}.\n\n` +
+            `Stored:  ${data.stored_sha256}\n` +
+            `Current: ${data.current_sha256}`
+        );
+      }
+    } catch (e) {
+      window.alert("Could not reach the archive verification service.");
+    }
+
+    setTimeout(() => setVerifiedId(null), 3500);
   };
 
   return (
@@ -346,7 +385,7 @@ export default function Archive() {
                             {report.sha256 || "e3b0c44298fc1c149afbf4c8..."}
                           </code>
                           <button
-                            onClick={() => handleVerify(report.id)}
+                            onClick={() => handleVerify(report)}
                             className="text-[11px] text-emerald-400 hover:text-emerald-300 transition underline ml-1"
                             title="Verify Hash against stored ledger"
                           >
