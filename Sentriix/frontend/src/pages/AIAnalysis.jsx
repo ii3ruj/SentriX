@@ -216,9 +216,10 @@ export default function AIAnalysis() {
 
   if (incident) {
     const riskScore =
-      incident.risk_score ||
+      incident.risk_score ??
       (incident.severity === "Critical" ? 87 : incident.severity === "High" ? 74 : 52);
-    const riskDetected = riskScore > 30;
+    const riskDetected =
+      incident.flow ? incident.flow === "full_path" : riskScore > 30;
     const severity = incident.severity || incident.asset_criticality || "Medium";
     const threatType = incident.incident_type || incident.threat_type || incident.title || "Unknown";
 
@@ -236,14 +237,20 @@ export default function AIAnalysis() {
       risk_detected: riskDetected,
       risk_score: riskDetected ? riskScore : null,
       analysis_id: `AI-ANL-${String(incident.id).replace("INC-", "")}`,
-      model_used: "SentriX Threat Intelligence Model v2.1",
-      analysis_time: new Date().toLocaleString("en-US", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }),
+      model_used:
+        incident.model_used || "SentriX Threat Intelligence Model v2.1",
+      analysis_time: incident.created_at
+        ? new Date(incident.created_at).toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })
+        : new Date().toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
       data_sources: `${incident.source || "PDF/Telemetry"}, Threat Intel, Behavioral Logs`,
-      mitre_tactics: "Impact, Execution, Defense Evasion",
-      attack_technique: "T1486, T1070, T1059",
+      mitre_tactics: incident.mitre_tactics || "Impact, Execution, Defense Evasion",
+      attack_technique: incident.attack_technique || "T1486, T1070, T1059",
       key_findings:
         incident.key_findings && Array.isArray(incident.key_findings)
           ? incident.key_findings
