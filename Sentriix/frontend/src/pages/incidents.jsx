@@ -10,6 +10,9 @@ import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
+
 /*
 |--------------------------------------------------------------------------
 | Temporary Raw Incidents Fallback
@@ -362,6 +365,18 @@ export default function Incidents() {
                           <span className="text-[10px]">View</span>
                           <Eye size={16} />
                         </Link>
+
+                        {/* REPORT PDF */}
+                        <a
+                          href={`${API_BASE}/api/archive/${incident.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex flex-col items-center gap-0.5 text-purple-400 hover:text-purple-300 transition"
+                          title="View AI Report (PDF)"
+                        >
+                          <span className="text-[10px]">Report</span>
+                          <Eye size={16} />
+                        </a>
 
                         {/* TEAM */}
                         <Link
