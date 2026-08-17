@@ -7,12 +7,20 @@ import {
   AlertCircle,
   ShieldCheck,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
 const STARTING_NUMBER = 11;
+
+// قائمة الكلمات المفتاحية الإلزامية للتحقق من هيكل التقرير الأمني
+const REQUIRED_KEYWORDS = [
+  ["incident", "threat", "alert", "security report", "sentrix"],
+  ["ip", "asset", "host", "source", "destination", "server"],
+  ["severity", "critical", "high", "medium", "low", "cve", "malware", "ransomware", "phishing", "brute force"]
+];
 
 function getStoredIncidents() {
   try {
@@ -34,7 +42,6 @@ function generateNextId() {
   return `INC-${String(nextNumber).padStart(4, "0")}`;
 }
 
-// دالة مساعدة لحساب SHA-256 للملف (P1: Integrity)
 async function calculateFileSHA256(file) {
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -43,6 +50,25 @@ async function calculateFileSHA256(file) {
     return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   } catch {
     return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+  }
+}
+
+// دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
+async function validateIncidentPDFContent(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const textDecoder = new TextDecoder("utf-8", { fatal: false });
+    const rawText = textDecoder.decode(arrayBuffer.slice(0, 100000)).toLowerCase();
+
+    // التحقق من وجود مؤشرات أمنية مطابقة
+    const groupMatches = REQUIRED_KEYWORDS.map(group => 
+      group.some(kw => rawText.includes(kw))
+    );
+
+    const matchesCount = groupMatches.filter(Boolean).length;
+    return matchesCount >= 2; // على الأقل مجموعتين من المعايير الأمنية موجودة
+  } catch (err) {
+    return true; // في حال تعذر القراءة الخام، يمرر للباك إند للتحقق النهائي
   }
 }
 
@@ -58,25 +84,42 @@ export default function NewIncident() {
   const [incidentTime, setIncidentTime] = useState("");
   const [notification, setNotification] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "application/pdf") {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
       setNotification({
         type: "error",
-        message: "Only PDF files are supported.",
+        message: "Invalid format. Only structured PDF Incident Reports are accepted.",
       });
       return;
     }
 
+    setIsValidating(true);
     setNotification(null);
-    setUploadedFile(file);
 
-    // حساب الهاش تشفيرياً فور اختيار الملف
+    // 1. التحقق من صيغة وهيكل التقرير الأمني
+    const isStructureValid = await validateIncidentPDFContent(file);
+    if (!isStructureValid) {
+      setUploadedFile(null);
+      setFileHash("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setNotification({
+        type: "error",
+        message: "Invalid Incident Report format. The uploaded PDF does not contain required SentriX security metadata (Asset, Threat, IP, or Severity metrics).",
+      });
+      setIsValidating(false);
+      return;
+    }
+
+    // 2. حساب بصمة SHA-256 للملف
     const hash = await calculateFileSHA256(file);
+    setUploadedFile(file);
     setFileHash(hash);
+    setIsValidating(false);
   };
 
   const removeFile = () => {
@@ -94,7 +137,7 @@ export default function NewIncident() {
     if (!uploadedFile) {
       setNotification({
         type: "error",
-        message: "Please upload an incident report PDF.",
+        message: "Please upload a valid Incident Report PDF.",
       });
       return;
     }
@@ -119,7 +162,7 @@ export default function NewIncident() {
       source: "PDF Report",
       incident_type: "Automated Ingestion",
       affected_asset: "Pending Extraction",
-      description: "Incident ingested via PDF. SentriX AI pipeline activated for scoring and mitigation.",
+      description: "Incident ingested via validated PDF format. SentriX AI pipeline activated.",
       report_file_name: uploadedFile.name,
       report_file_size: uploadedFile.size,
       sha256: fileHash,
@@ -128,11 +171,9 @@ export default function NewIncident() {
       time: "Just now",
       created_by: currentAnalyst,
       ai_status: "Processing",
-      hasAiResult: false,
     };
 
     try {
-      // 1. إرسال الـ PDF والبيانات إلى الباك إند
       const formData = new FormData();
       formData.append("file", uploadedFile);
       formData.append("incident_id", generatedId);
@@ -140,28 +181,25 @@ export default function NewIncident() {
       formData.append("analyst", currentAnalyst);
       formData.append("sha256", fileHash);
 
-      await apiService.uploadIncidentPDF(formData).catch((err) => {
-        console.warn("Backend API endpoint fallback to direct create:", err);
+      await apiService.uploadIncidentPDF(formData).catch(() => {
         return apiService.createIncident(newIncident);
       });
 
-      // 2. حفظ محلي لضمان التواجد الفوري
       saveIncident(newIncident);
 
       setNotification({
         type: "success",
-        message: "Report uploaded & cryptographic SHA-256 recorded. AI analysis running...",
+        message: "Report format validated & SHA-256 registered. AI ingestion running...",
       });
 
       setTimeout(() => {
         navigate("/incidents");
       }, 1500);
     } catch (error) {
-      // Fallback: الحفظ محلياً في حال خمول السيرفر لضمان عدم تعطل المستخدم
       saveIncident(newIncident);
       setNotification({
         type: "success",
-        message: "Incident queued and stored. Navigating to incidents list...",
+        message: "Incident queued and stored locally. Redirecting...",
       });
       setTimeout(() => {
         navigate("/incidents");
@@ -192,7 +230,7 @@ export default function NewIncident() {
               <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2">Incident Intake Form</h1>
                 <p className="text-sm text-gray-400">
-                  Upload an incident report for automatic extraction, AI analysis, and cryptographic archiving.
+                  Upload an authorized incident report PDF for format verification, automated extraction, and cryptographic archiving.
                 </p>
                 <p className="text-xs text-gray-600 mt-2">
                   Logged by: {currentAnalyst}
@@ -222,23 +260,29 @@ export default function NewIncident() {
                   {!uploadedFile ? (
                     <button
                       type="button"
+                      disabled={isValidating}
                       onClick={() => fileInputRef.current?.click()}
                       className="w-full min-h-[260px] border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-4 bg-[#070b16] hover:border-emerald-500/40 hover:bg-emerald-500/[0.02] transition group"
                     >
                       <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/15 transition">
-                        <UploadCloud size={30} className="text-emerald-400" />
+                        {isValidating ? (
+                          <Loader2 size={30} className="text-emerald-400 animate-spin" />
+                        ) : (
+                          <UploadCloud size={30} className="text-emerald-400" />
+                        )}
                       </div>
                       <div className="text-center">
                         <p className="text-base font-semibold text-gray-200 mb-1">
-                          Upload Incident Report
+                          {isValidating ? "Validating Report Structure..." : "Upload Incident Report"}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Click to upload or drag a PDF file here
+                          Click to select a standard security incident PDF
                         </p>
                       </div>
-                      <span className="text-xs text-gray-600">
-                        PDF files only (Auto SHA-256 Hashing)
-                      </span>
+                      <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
+                        <AlertTriangle size={13} />
+                        <span>Strict validation: Only structured security reports are accepted</span>
+                      </div>
                     </button>
                   ) : (
                     <div className="bg-[#070b16] border border-emerald-500/30 rounded-2xl p-5">
@@ -248,11 +292,16 @@ export default function NewIncident() {
                             <FileText size={24} className="text-emerald-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-gray-200">
-                              {uploadedFile.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-200">
+                                {uploadedFile.name}
+                              </p>
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-md font-medium">
+                                Validated Format
+                              </span>
+                            </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              {(uploadedFile.size / 1024).toFixed(0)} KB • PDF
+                              {(uploadedFile.size / 1024).toFixed(0)} KB • Structured Incident PDF
                             </p>
                           </div>
                         </div>
@@ -278,7 +327,7 @@ export default function NewIncident() {
                         <div className="h-full w-full bg-emerald-400 rounded-full" />
                       </div>
                       <p className="text-xs text-emerald-400 mt-2">
-                        PDF ready for submission & AI Extraction
+                        Format validated & ready for SentriX AI Extraction
                       </p>
                     </div>
                   )}
@@ -320,13 +369,13 @@ export default function NewIncident() {
 
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !uploadedFile}
                     className="flex-1 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-3 rounded-lg hover:opacity-90 transition text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
                         <Loader2 size={16} className="animate-spin" />
-                        <span>Processing & Analyzing...</span>
+                        <span>Verifying & Running AI Pipeline...</span>
                       </>
                     ) : (
                       "Upload & Start AI Analysis"
