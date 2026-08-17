@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, FileText } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
+
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
 
 const MOCK_INCIDENTS = [
   {
@@ -279,14 +282,27 @@ export default function IncidentDetail() {
                 Some fields will be auto-filled from AI analysis results once available. Archived data can be found under the Archive page.
               </p>
 
-              {/* PROCEED TO AI ANALYSIS */}
-              <Link
-                to={`/ai-analysis/${incident.id}`}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-3 rounded-xl hover:opacity-90 transition shadow-lg shadow-emerald-500/10"
-              >
-                <Sparkles size={18} />
-                Proceed to AI Analysis
-              </Link>
+              {/* ACTIONS */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  to={`/ai-analysis/${incident.id}`}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-3 rounded-xl hover:opacity-90 transition shadow-lg shadow-emerald-500/10"
+                >
+                  <Sparkles size={18} />
+                  Proceed to AI Analysis
+                </Link>
+
+                {/* الـ PDF الرسمي المولّد من الباك إند بعد التحليل */}
+                <a
+                  href={`${API_BASE}/api/archive/${incident.id}/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 border border-emerald-500/30 text-emerald-300 font-semibold py-3 rounded-xl hover:bg-emerald-500/10 transition"
+                >
+                  <FileText size={18} />
+                  View AI Report (PDF)
+                </a>
+              </div>
             </>
           )}
         </main>
