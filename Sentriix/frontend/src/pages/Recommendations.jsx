@@ -11,6 +11,9 @@ import {
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
+
 const DEFAULT_RECOMMENDATIONS = [
   {
     id: 1,
@@ -83,6 +86,7 @@ export default function Recommendations() {
   });
 
   const [recommendationsList, setRecommendationsList] = useState(DEFAULT_RECOMMENDATIONS);
+  const [isArchiving, setIsArchiving] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,36 +143,41 @@ export default function Recommendations() {
     return "bg-gray-500/10 text-gray-400 border border-gray-500/20";
   };
 
-  const handleGenerateReport = () => {
-    // إنشاء تقرير للأرشفة المباشرة
-    const newReport = {
-      id: `RPT-${String(Date.now()).slice(-4)}`,
-      incidentId: incident.id,
-      title: `Incident AI Report - ${incident.id}`,
-      type: "Incident Report",
-      archivedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
-      sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      archivedBy: "SecOps Analyst",
-      retentionUntil: "2033-08-17",
-      content: {
-        incidentTitle: incident.title,
-        severity: incident.severity,
-        riskScore: `${incident.riskScore} / 100`,
-        threatType: incident.title,
-        playbook: incident.playbook,
-        recommendedActions: recommendationsList.map((r) => r.title),
-      },
-    };
+  const handleGenerateReport = async () => {
+    const confirmed = window.confirm(
+      `Generate and archive the report for ${incident.id}?\n\n` +
+      `The report will be stored as an immutable snapshot with a SHA-256 ` +
+      `integrity fingerprint and retained for 7 years.`
+    );
+    if (!confirmed) return;
+
+    setIsArchiving(true);
 
     try {
-      const storedReports = JSON.parse(localStorage.getItem("sentrix_archived_reports") || "[]");
-      storedReports.unshift(newReport);
-      localStorage.setItem("sentrix_archived_reports", JSON.stringify(storedReports));
-    } catch (e) {
-      console.error(e);
-    }
+      // التحقق من سلامة اللقطة المؤرشفة في الباك إند
+      const res = await fetch(`${API_BASE}/api/archive/verify/${incident.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const verification = await res.json();
 
-    navigate("/archive");
+      // عرض الـ PDF الرسمي المولّد من الباك إند
+      window.open(`${API_BASE}/api/archive/${incident.id}/download`, "_blank");
+
+      window.alert(
+        `Report archived successfully.\n\n` +
+        `SHA-256: ${String(verification.stored_sha256 || "").slice(0, 32)}...\n` +
+        `Integrity verified: ${verification.integrity_ok ? "PASSED" : "FAILED"}`
+      );
+
+      navigate("/archive");
+    } catch (e) {
+      window.alert("Could not reach the archive service. Please try again.");
+    } finally {
+      setIsArchiving(false);
+    }
   };
 
   return (
@@ -323,10 +332,11 @@ export default function Recommendations() {
 
                 <button
                   onClick={handleGenerateReport}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold text-sm py-3 rounded-lg hover:opacity-90 transition shadow-lg shadow-emerald-500/10"
+                  disabled={isArchiving}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold text-sm py-3 rounded-lg hover:opacity-90 transition shadow-lg shadow-emerald-500/10 disabled:opacity-50"
                 >
                   <Download size={16} />
-                  Generate & Archive Report
+                  {isArchiving ? "Archiving..." : "Generate & Archive Report"}
                 </button>
               </section>
             </div>
