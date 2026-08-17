@@ -181,29 +181,28 @@ export default function NewIncident() {
       formData.append("analyst", currentAnalyst);
       formData.append("sha256", fileHash);
 
-      await apiService.uploadIncidentPDF(formData).catch(() => {
-        return apiService.createIncident(newIncident);
-      });
+      // الباك إند يحلل الملف ويرجع الحادثة بمعرّفها الحقيقي
+      const result = await apiService.uploadIncidentPDF(formData);
+      const realId = result?.incident?.id || generatedId;
 
-      saveIncident(newIncident);
+      saveIncident({ ...newIncident, id: realId });
 
       setNotification({
         type: "success",
-        message: "Report format validated & SHA-256 registered. AI ingestion running...",
+        message: "Report format validated & SHA-256 registered. AI analysis complete.",
       });
 
       setTimeout(() => {
-        navigate("/incidents");
-      }, 1500);
+        navigate(`/ai-analysis/${realId}`);
+      }, 1200);
     } catch (error) {
       saveIncident(newIncident);
       setNotification({
-        type: "success",
-        message: "Incident queued and stored locally. Redirecting...",
+        type: "error",
+        message: "Could not reach the AI analysis service. Please try again.",
       });
-      setTimeout(() => {
-        navigate("/incidents");
-      }, 1500);
+      setIsSubmitting(false);
+      return;
     } finally {
       setIsSubmitting(false);
     }
