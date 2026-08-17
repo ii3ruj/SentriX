@@ -1,4 +1,17 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
+/**
+ * SentriX — API Service Layer
+ * ---------------------------------------------------------------------------
+ * الطبقة الوحيدة التي تعرف عنوان الباك إند.
+ * كل الصفحات تستدعي apiService فقط، ولا تتصل بـ DataRobot أو Supabase مباشرة.
+ *
+ * متغيّر البيئة على Render (Static Site):
+ *   VITE_API_URL = https://sentrix-backend-qsnu.onrender.com
+ */
+
+const BASE_URL =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
+
+export { BASE_URL };
 
 // دالة مساعدة عامة للطلبات
 async function request(endpoint, options = {}) {
@@ -23,6 +36,7 @@ async function request(endpoint, options = {}) {
 
 export const apiService = {
   // 1. Dashboard Stats
+  // يرجع: { attackTypes, totals, severityCounts, trends, crsi }
   getDashboardStats: () => request("/api/dashboard/stats"),
 
   // 2. Incidents (Intake & List)
@@ -35,6 +49,7 @@ export const apiService = {
     }),
 
   // رفع تقارير PDF وتحليلها
+  // الحقول المتوقعة في FormData: file, incident_id, actual_time, analyst, sha256
   uploadIncidentPDF: async (formData) => {
     const token = localStorage.getItem("token");
     const res = await fetch(`${BASE_URL}/api/incidents/upload-pdf`, {
@@ -50,17 +65,28 @@ export const apiService = {
 
   // 3. AI Analysis & Recommendations
   getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
-  getRecommendations: () => request("/api/recommendations"),
+  getRecommendations: (incidentId) =>
+    request(
+      incidentId
+        ? `/api/recommendations?incident_id=${incidentId}`
+        : "/api/recommendations"
+    ),
   getCRSIRecommendations: () => request("/api/crsi-recommendations"),
   getCRSIPosture: () => request("/api/crsi-assessment"),
 
   // 4. Archiving (P1 - P4 Verification & Retrieval)
   getArchivedIncidents: () => request("/api/archive"),
-  verifyArchiveHash: (incidentId, sha256Hash) =>
+
+  // P1 Integrity — يعيد الباك إند حساب البصمة ويقارنها بالمخزّنة
+  verifyArchiveHash: (incidentId) =>
     request(`/api/archive/verify/${incidentId}`, {
       method: "POST",
-      body: JSON.stringify({ hash: sha256Hash }),
+      body: "{}",
     }),
+
+  // رابط الـ PDF الرسمي المولّد والمؤرشف (يُفتح مباشرة في تبويب جديد)
+  archiveDownloadUrl: (incidentId) =>
+    `${BASE_URL}/api/archive/${incidentId}/download`,
 
   // 5. Team Connection (Chat / Collab)
   getTeamMessages: () => request("/api/team/messages"),
@@ -69,4 +95,17 @@ export const apiService = {
       method: "POST",
       body: JSON.stringify(messageData),
     }),
+
+  // 6. Environment Simulator (Test Environment Server)
+  startSimulator: () => request("/api/simulator/start", { method: "POST" }),
+  stopSimulator: () => request("/api/simulator/stop", { method: "POST" }),
+  burstSimulator: (count = 5) =>
+    request(`/api/simulator/burst?count=${count}`, { method: "POST" }),
+  getSimulatorStatus: () => request("/api/simulator/status"),
+
+  // 7. Diagnostics — يعرض حالة الربط دون كشف أي مفتاح
+  getDebugConfig: () => request("/api/debug/config"),
+  getHealth: () => request("/health"),
 };
+
+export default apiService;
