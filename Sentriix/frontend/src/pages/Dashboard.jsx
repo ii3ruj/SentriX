@@ -32,6 +32,27 @@ const defaultAttackTypes = [
   { name: "Other", value: 6, percent: 5, color: "#9ca3af" },
 ];
 
+/* ألوان ثابتة تُستخدم لتلوين أنواع الهجمات القادمة من الـ API */
+const ATTACK_COLORS = [
+  "#f97316",
+  "#ef4444",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#9ca3af",
+];
+
+/* الـ API يرجع { name, value } فقط — نضيف اللون والنسبة هنا للعرض */
+function decorateAttackTypes(list) {
+  const total = list.reduce((sum, t) => sum + (t.value || 0), 0);
+  return list.map((t, i) => ({
+    name: t.name,
+    value: t.value || 0,
+    percent: total > 0 ? Math.round(((t.value || 0) / total) * 100) : 0,
+    color: t.color || ATTACK_COLORS[i % ATTACK_COLORS.length],
+  }));
+}
+
 const SEVERITY_PRIORITY = {
   Critical: 3,
   High: 2,
@@ -110,6 +131,7 @@ function getTodayHourlyData(list) {
 export default function Dashboard() {
   const [incidentsList, setIncidentsList] = useState(fallbackIncidents);
   const [attackTypes, setAttackTypes] = useState(defaultAttackTypes);
+  const [trends, setTrends] = useState(null);
 
   // جلب البيانات من الـ API وتحديثها تلقائياً
   useEffect(() => {
@@ -132,10 +154,15 @@ export default function Dashboard() {
           setIncidentsList(formatted);
         }
 
-        // جلب توزيع أنواع الهجمات إن وجد مسار إحصائيات
+        // جلب توزيع أنواع الهجمات ونسب التغيّر من مسار الإحصائيات
         const statsData = await apiService.getDashboardStats().catch(() => null);
-        if (isMounted && statsData && statsData.attackTypes) {
-          setAttackTypes(statsData.attackTypes);
+        if (isMounted && statsData) {
+          if (Array.isArray(statsData.attackTypes) && statsData.attackTypes.length > 0) {
+            setAttackTypes(decorateAttackTypes(statsData.attackTypes));
+          }
+          if (statsData.trends) {
+            setTrends(statsData.trends);
+          }
         }
       } catch (err) {
         console.warn("Using fallback dashboard data:", err);
@@ -167,8 +194,8 @@ export default function Dashboard() {
     {
       label: "Total Incidents",
       value: sortedIncidents.length,
-      change: "18%",
-      positive: true,
+      change: trends?.total?.change ?? "—",
+      positive: trends?.total?.positive ?? true,
       icon: MessageSquare,
       color: "text-blue-400",
       bg: "bg-blue-500/10",
@@ -176,8 +203,8 @@ export default function Dashboard() {
     {
       label: "Critical Incidents",
       value: criticalCount,
-      change: "7%",
-      positive: false,
+      change: trends?.critical?.change ?? "—",
+      positive: trends?.critical?.positive ?? false,
       icon: AlertCircle,
       color: "text-red-400",
       bg: "bg-red-500/10",
@@ -185,8 +212,8 @@ export default function Dashboard() {
     {
       label: "Analyzed Incidents",
       value: analyzedCount,
-      change: "12%",
-      positive: true,
+      change: trends?.analyzed?.change ?? "—",
+      positive: trends?.analyzed?.positive ?? true,
       icon: CheckCircle2,
       color: "text-emerald-400",
       bg: "bg-emerald-500/10",
@@ -194,8 +221,8 @@ export default function Dashboard() {
     {
       label: "Pending Analysis",
       value: pendingCount,
-      change: "4%",
-      positive: false,
+      change: trends?.pending?.change ?? "—",
+      positive: trends?.pending?.positive ?? false,
       icon: Clock,
       color: "text-amber-400",
       bg: "bg-amber-500/10",
@@ -247,7 +274,7 @@ export default function Dashboard() {
                         positive ? "text-emerald-400" : "text-red-400"
                       }`}
                     >
-                      ↑ {change}
+                      {positive ? "↑" : "↓"} {change}
                     </span>
                   </div>
 
