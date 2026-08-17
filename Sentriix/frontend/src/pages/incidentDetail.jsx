@@ -1,17 +1,10 @@
+import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-
-import {
-  ArrowLeft,
-  Sparkles,
-} from "lucide-react";
-
+import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
-
-
-// ===== بيانات وهمية (مؤقتة لين يتربط الباك إند) =====
+import { apiService } from "../services/api";
 
 const MOCK_INCIDENTS = [
-
   {
     id: "INC-0001",
     title: "Ransomware detected on Server-01",
@@ -26,7 +19,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-26 10:32:15 AM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0002",
     title: "Unusual login from foreign location",
@@ -41,7 +33,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-25 03:14:02 PM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0003",
     title: "Multiple failed login attempts",
@@ -56,7 +47,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-25 09:10:00 AM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0004",
     title: "Data exfiltration attempt blocked",
@@ -71,7 +61,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-25 06:40:00 AM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0005",
     title: "Brute force attack detected",
@@ -86,7 +75,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-24 18:05:00 PM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0006",
     title: "Suspicious file execution",
@@ -101,7 +89,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-23 11:20:00 AM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0007",
     title: "Phishing email detected",
@@ -116,7 +103,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-23 08:15:00 AM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0008",
     title: "Privilege escalation attempt",
@@ -131,7 +117,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-22 14:30:00 PM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0009",
     title: "Malware communication blocked",
@@ -146,7 +131,6 @@ const MOCK_INCIDENTS = [
     time: "2026-05-22 09:00:00 AM",
     created_by: "analyst@gmail.com",
   },
-
   {
     id: "INC-0010",
     title: "Unauthorized access to database",
@@ -161,311 +145,152 @@ const MOCK_INCIDENTS = [
     time: "2026-05-21 22:50:00 PM",
     created_by: "analyst@gmail.com",
   },
-
 ];
 
-
 function getStoredIncidents() {
-
   try {
-
-    return JSON.parse(
-      localStorage.getItem(
-        "sentrix_incidents"
-      ) || "[]"
-    );
-
+    return JSON.parse(localStorage.getItem("sentrix_incidents") || "[]");
   } catch {
-
     return [];
-
   }
-
 }
 
-
-function InfoRow({
-  label,
-  value,
-}) {
-
+function InfoRow({ label, value }) {
   return (
-
     <div className="flex items-start justify-between py-3 border-b border-white/5 last:border-0">
-
-      <span className="text-sm text-gray-500">
-        {label}
-      </span>
-
+      <span className="text-sm text-gray-500">{label}</span>
       <span className="text-sm text-gray-100 font-medium text-right max-w-[60%]">
-
-        {value || (
-          <span className="text-gray-600 italic">
-            Not provided
-          </span>
-        )}
-
+        {value || <span className="text-gray-600 italic">Not provided</span>}
       </span>
-
     </div>
-
   );
-
 }
-
 
 export default function IncidentDetail() {
-
   const { id } = useParams();
+  const [liveIncident, setLiveIncident] = useState(null);
 
+  useEffect(() => {
+    let isMounted = true;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Get Incidents
-  |--------------------------------------------------------------------------
-  */
+    const fetchDetail = async () => {
+      if (!id) return;
+      try {
+        const data = await apiService.getIncidentById(id).catch(() => null);
+        if (isMounted && data) {
+          setLiveIncident(data);
+        }
+      } catch (err) {
+        console.warn("Using fallback incident details:", err);
+      }
+    };
 
-  const storedIncidents =
-    getStoredIncidents();
+    fetchDetail();
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
-
+  const storedIncidents = getStoredIncidents();
   const allIncidents = [
+    ...(liveIncident ? [liveIncident] : []),
     ...storedIncidents,
     ...MOCK_INCIDENTS,
   ];
 
-
-  const incident =
-    allIncidents.find(
-      (inc) => inc.id === id
-    );
-
+  const incident = allIncidents.find((inc) => inc.id === id);
 
   return (
-
     <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
-
-
-      {/* =========================================================
-          UNIFIED SIDEBAR
-      ========================================================= */}
-
+      {/* ================= UNIFIED SIDEBAR ================= */}
       <Sidebar />
 
-
-      {/* =========================================================
-          MAIN CONTENT
-      ========================================================= */}
-
+      {/* ================= MAIN CONTENT ================= */}
       <div className="flex-1 flex flex-col">
-
-
-        {/* =======================================================
-            HEADER
-        ======================================================= */}
-
+        {/* ================= HEADER ================= */}
         <header className="flex items-center px-8 py-4 border-b border-white/10">
-
           <Link
             to="/incidents"
             className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200"
           >
-
             <ArrowLeft size={16} />
-
             Back to Incidents
-
           </Link>
-
         </header>
 
-
-        {/* =======================================================
-            CONTENT
-        ======================================================= */}
-
+        {/* ================= CONTENT ================= */}
         <main className="flex-1 overflow-y-auto p-8 max-w-3xl space-y-6">
-
-
-          {/* =====================================================
-              INCIDENT NOT FOUND
-          ===================================================== */}
-
           {!incident ? (
-
             <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 text-center text-gray-400">
-
-              Incident{" "}
-
-              <span className="text-emerald-400">
-                {id}
-              </span>
-
-              {" "}not found.
-
+              Incident <span className="text-emerald-400 font-mono">{id}</span> not found.
             </div>
-
           ) : (
-
             <>
-
-
-              {/* =================================================
-                  INCIDENT TITLE
-              ================================================= */}
-
+              {/* INCIDENT TITLE */}
               <div>
-
-                <p className="text-sm text-gray-500 mb-1">
-                  {incident.id}
-                </p>
-
-                <h1 className="text-2xl font-bold">
-                  {incident.title}
-                </h1>
-
+                <p className="text-sm text-gray-500 mb-1 font-mono">{incident.id}</p>
+                <h1 className="text-2xl font-bold">{incident.title}</h1>
               </div>
 
-
-              {/* =================================================
-                  INCIDENT INFORMATION
-              ================================================= */}
-
+              {/* INCIDENT INFORMATION */}
               <div className="bg-[#0c1220] border border-white/10 rounded-xl p-6">
-
                 <h2 className="text-sm font-semibold text-gray-300 mb-2">
                   Incident Information
                 </h2>
 
-
-                <InfoRow
-                  label="Source"
-                  value={incident.source}
-                />
-
-
+                <InfoRow label="Source" value={incident.source} />
                 <InfoRow
                   label="Incident Type"
-                  value={
-                    incident.incident_type
-                  }
+                  value={incident.incident_type || incident.threat_type}
                 />
-
-
                 <InfoRow
                   label="Time"
-                  value={
-                    incident.time ||
-                    incident.created_at
-                  }
+                  value={incident.time || incident.actual_incident_time || incident.created_at}
                 />
-
-
-                <InfoRow
-                  label="Source IP"
-                  value={
-                    incident.source_ip
-                  }
-                />
-
-
-                <InfoRow
-                  label="Destination IP"
-                  value={
-                    incident.destination_ip
-                  }
-                />
-
-
+                <InfoRow label="Source IP" value={incident.source_ip} />
+                <InfoRow label="Destination IP" value={incident.destination_ip} />
                 <InfoRow
                   label="Asset Type"
-                  value={
-                    incident.asset_type
-                  }
+                  value={incident.asset_type || incident.affected_asset}
                 />
-
-
                 <InfoRow
                   label="Asset Criticality"
-                  value={
-                    incident.asset_criticality
-                  }
+                  value={incident.asset_criticality || incident.severity}
                 />
-
-
-                <InfoRow
-                  label="Logged By"
-                  value={
-                    incident.created_by
-                  }
-                />
-
+                <InfoRow label="Logged By" value={incident.created_by} />
 
                 {/* Description */}
-
                 <div className="pt-4 mt-2 border-t border-white/5">
-
                   <h2 className="text-sm font-semibold text-gray-300 mb-2">
                     Description
                   </h2>
-
-
                   <p className="text-sm text-gray-400 leading-relaxed">
-
                     {incident.description || (
-
                       <span className="italic text-gray-600">
                         No description provided.
                       </span>
-
                     )}
-
                   </p>
-
                 </div>
-
               </div>
 
-
-              {/* =================================================
-                  NOTE
-              ================================================= */}
-
+              {/* NOTE */}
               <p className="text-xs text-gray-600 italic">
-
-                Some fields will be auto-filled from AI analysis
-                results once available. Archived data can be found
-                under the Archive page.
-
+                Some fields will be auto-filled from AI analysis results once available. Archived data can be found under the Archive page.
               </p>
 
-
-              {/* =================================================
-                  PROCEED TO AI ANALYSIS
-              ================================================= */}
-
+              {/* PROCEED TO AI ANALYSIS */}
               <Link
                 to={`/ai-analysis/${incident.id}`}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-3 rounded-xl hover:opacity-90 transition"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-3 rounded-xl hover:opacity-90 transition shadow-lg shadow-emerald-500/10"
               >
-
                 <Sparkles size={18} />
-
                 Proceed to AI Analysis
-
               </Link>
-
-
             </>
-
           )}
-
         </main>
-
       </div>
-
     </div>
-
   );
-
 }
