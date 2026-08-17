@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
-import Home from "./pages/Home";
+<Route path="/" element={<Login />} />
 import Login from "./pages/Login";
 
 import Dashboard from "./pages/Dashboard";
