@@ -1,162 +1,148 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-<Route path="/" element={<Login />} />
 import Login from "./pages/Login";
-
 import Dashboard from "./pages/Dashboard";
 import Incidents from "./pages/incidents";
 import IncidentDetail from "./pages/incidentDetail";
 import NewIncident from "./pages/NewIncident";
-
 import AIAnalysis from "./pages/AIAnalysis";
-
 import CRSIAssessment from "./pages/CRSIAssessment";
-
 import Recommendations from "./pages/Recommendations";
 import CRSIRecommendations from "./pages/CRSIRecommendations";
-
 import Archive from "./pages/Archive";
 import TeamConnection from "./pages/TeamConnection";
 
-
 export default function App() {
   return (
-    <Routes>
+    <BrowserRouter>
+      <Routes>
 
-      {/* =========================
-          HOME
-      ========================= */}
+        {/* =========================
+            HOME / LOGIN
+        ========================= */}
 
-      <Route
-        path="/"
-        element={<Home />}
-      />
+        <Route
+          path="/"
+          element={<Login />}
+        />
 
+        {/* =========================
+            LOGIN
+        ========================= */}
 
-      {/* =========================
-          LOGIN
-      ========================= */}
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-      <Route
-        path="/login"
-        element={<Login />}
-      />
+        {/* =========================
+            DASHBOARD
+        ========================= */}
 
+        <Route
+          path="/dashboard"
+          element={<Dashboard />}
+        />
 
-      {/* =========================
-          DASHBOARD
-      ========================= */}
+        {/* =========================
+            INCIDENTS
+        ========================= */}
 
-      <Route
-        path="/dashboard"
-        element={<Dashboard />}
-      />
+        <Route
+          path="/incidents"
+          element={<Incidents />}
+        />
 
+        {/* View specific incident */}
 
-      {/* =========================
-          INCIDENTS
-      ========================= */}
+        <Route
+          path="/incidents/:id"
+          element={<IncidentDetail />}
+        />
 
-      <Route
-        path="/incidents"
-        element={<Incidents />}
-      />
+        {/* New Incident */}
 
-      {/* View specific incident */}
+        <Route
+          path="/new-incident"
+          element={<NewIncident />}
+        />
 
-      <Route
-        path="/incidents/:id"
-        element={<IncidentDetail />}
-      />
+        {/* =========================
+            AI ANALYSIS
+        ========================= */}
 
-      {/* New Incident */}
+        <Route
+          path="/ai-analysis"
+          element={<AIAnalysis />}
+        />
 
-      <Route
-        path="/new-incident"
-        element={<NewIncident />}
-      />
+        <Route
+          path="/ai-analysis/:id"
+          element={<AIAnalysis />}
+        />
 
+        {/* =========================
+            CRSI
+        ========================= */}
 
-      {/* =========================
-          AI ANALYSIS
-      ========================= */}
+        <Route
+          path="/crsi-assessment"
+          element={<CRSIAssessment />}
+        />
 
-      <Route
-        path="/ai-analysis"
-        element={<AIAnalysis />}
-      />
+        {/* =========================
+            AI RISK SCORE
+            RECOMMENDATIONS
+        ========================= */}
 
-      <Route
-        path="/ai-analysis/:id"
-        element={<AIAnalysis />}
-      />
+        <Route
+          path="/recommendations"
+          element={<Recommendations />}
+        />
 
+        <Route
+          path="/recommendations/:id"
+          element={<Recommendations />}
+        />
 
-      {/* =========================
-          CRSI
-      ========================= */}
+        {/* =========================
+            CRSI RECOMMENDATIONS
+        ========================= */}
 
-      <Route
-        path="/crsi-assessment"
-        element={<CRSIAssessment />}
-      />
+        <Route
+          path="/crsi-recommendations"
+          element={<CRSIRecommendations />}
+        />
 
+        {/* =========================
+            ARCHIVE
+        ========================= */}
 
-      {/* =========================
-          AI RISK SCORE
-          RECOMMENDATIONS
-      ========================= */}
+        <Route
+          path="/archive"
+          element={<Archive />}
+        />
 
-      <Route
-        path="/recommendations"
-        element={<Recommendations />}
-      />
+        {/* =========================
+            TEAM CONNECTION
+        ========================= */}
 
-      <Route
-        path="/recommendations/:id"
-        element={<Recommendations />}
-      />
+        <Route
+          path="/team-connection"
+          element={<TeamConnection />}
+        />
 
+        {/* =========================
+            UNKNOWN ROUTE
+        ========================= */}
 
-      {/* =========================
-          CRSI RECOMMENDATIONS
-      ========================= */}
+        <Route
+          path="*"
+          element={<Navigate to="/" replace />}
+        />
 
-      <Route
-        path="/crsi-recommendations"
-        element={<CRSIRecommendations />}
-      />
-
-
-      {/* =========================
-          ARCHIVE
-      ========================= */}
-
-      <Route
-        path="/archive"
-        element={<Archive />}
-      />
-
-
-      {/* =========================
-          TEAM CONNECTION
-      ========================= */}
-
-      <Route
-        path="/team-connection"
-        element={<TeamConnection />}
-      />
-
-
-      {/* =========================
-          UNKNOWN ROUTE
-      ========================= */}
-
-      <Route
-        path="*"
-        element={<Navigate to="/" replace />}
-      />
-
-    </Routes>
+      </Routes>
+    </BrowserRouter>
   );
 }
