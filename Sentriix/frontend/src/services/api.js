@@ -128,6 +128,13 @@ export const apiService = {
       body: "{}",
     }),
 
+  // قالب تقرير الحادثة الجاهز للتعبئة (يحمل التوكن مثل بقية روابط التنزيل)
+  incidentTemplateUrl: () => {
+    const token = localStorage.getItem("token");
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    return `${BASE_URL}/api/incidents/template/download${query}`;
+  },
+
   // رابط الـ PDF الرسمي المولّد والمؤرشف (يُفتح مباشرة في تبويب جديد).
   // المتصفح لا يرسل هيدر Authorization عند فتح رابط، فيُمرَّر التوكن
   // كمعامل استعلام — وهذا سبب رسالة "Unauthorized" عند التنزيل.
