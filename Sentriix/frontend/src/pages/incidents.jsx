@@ -366,18 +366,6 @@ export default function Incidents() {
                           <Eye size={16} />
                         </Link>
 
-                        {/* REPORT PDF */}
-                        <a
-                          href={`${API_BASE}/api/archive/${incident.id}/download`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex flex-col items-center gap-0.5 text-purple-400 hover:text-purple-300 transition"
-                          title="View AI Report (PDF)"
-                        >
-                          <span className="text-[10px]">Report</span>
-                          <Eye size={16} />
-                        </a>
-
                         {/* TEAM */}
                         <Link
                           to={`/team-connection?type=incident&id=${incident.id}`}
