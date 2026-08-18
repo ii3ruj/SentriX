@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Download,
   CalendarClock,
+  FileType2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
@@ -17,6 +18,7 @@ import { apiService } from "../services/api";
 
 const STARTING_NUMBER = 11;
 
+// قائمة الكلمات المفتاحية الإلزامية للتحقق من هيكل التقرير الأمني
 const REQUIRED_KEYWORDS = [
   ["incident", "threat", "alert", "security report", "sentrix"],
   ["ip", "asset", "host", "source", "destination", "server"],
@@ -54,12 +56,18 @@ async function calculateFileSHA256(file) {
   }
 }
 
+// دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
 async function validateIncidentPDFContent(file) {
+  // ملفات Word أرشيف ZIP، فلا يُقرأ نصها الخام هنا — يتولاها الباك إند
+  const name = (file.name || "").toLowerCase();
+  if (name.endsWith(".docx") || name.endsWith(".docm")) return true;
+
   try {
     const arrayBuffer = await file.arrayBuffer();
     const textDecoder = new TextDecoder("utf-8", { fatal: false });
     const rawText = textDecoder.decode(arrayBuffer.slice(0, 100000)).toLowerCase();
 
+    // التحقق من وجود مؤشرات أمنية مطابقة
     const groupMatches = REQUIRED_KEYWORDS.map(group => 
       group.some(kw => rawText.includes(kw))
     );
@@ -67,6 +75,11 @@ async function validateIncidentPDFContent(file) {
     const matchesCount = groupMatches.filter(Boolean).length;
     if (matchesCount >= 2) return true;
 
+    /*
+     * أغلب ملفات الـPDF تُخزَّن مضغوطة (FlateDecode) فلا يظهر نصها في
+     * البايتات الخام — ومنها قالب SentriX نفسه. الرفض هنا كان يمنع الملف
+     * من الوصول إلى الباك إند أصلاً فلا يعمل التحليل إطلاقاً.
+     */
     const looksCompressed =
       rawText.includes("flatedecode") ||
       rawText.includes("/filter") ||
@@ -74,7 +87,7 @@ async function validateIncidentPDFContent(file) {
 
     return looksCompressed;
   } catch (err) {
-    return true;
+    return true; // في حال تعذر القراءة الخام، يمرر للباك إند للتحقق النهائي
   }
 }
 
@@ -92,50 +105,21 @@ export default function NewIncident() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
-  // دالة تحميل القالب مباشرة كملف نصي/بي دي إف محلياً لتفادي أي أخطاء سيرفر
-  const handleDownloadTemplate = () => {
-    const templateContent = `SentriX — Incident Report Template
-Fill in the values below and upload this file on the New Incident page. Keep the field names exactly as they appear.
-
-1. Incident Information
-Incident Type: malware | ransomware | ddos | phishing | brute_force
-Source: EDR / SIEM
-Description: 
-
-2. Network Information
-Protocol: TCP
-Source IP: 
-Destination IP: 
-
-3. Asset Information
-Asset Type: Server | Workstation | Database
-Asset Criticality: low | medium | high | critical
-Exposure: internal | dmz | internet_facing
-Vulnerability: low | medium | high | critical
-Business Impact: low | medium | high | critical
-
-4. AI Network Features (37 required features)
-Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets Length Total, Bwd Packets Length Total, Fwd Packet Length Max, Fwd Packet Length Min, Fwd Packet Length Mean, Bwd Packet Length Max, Bwd Packet Length Min, Bwd Packet Length Mean, Flow Bytes/s, Flow Packets/s, Flow IAT Mean, Flow IAT Std, Fwd IAT Total, Bwd IAT Total, Fwd Header Length, Bwd Header Length, Fwd Packets/s, Bwd Packets/s, Packet Length Min, Packet Length Max, Packet Length Mean, Packet Length Std, Packet Length Variance, FIN Flag Count, SYN Flag Count, RST Flag Count, PSH Flag Count, ACK Flag Count, URG Flag Count, ECE Flag Count, Down/Up Ratio, Avg Packet Size, Fwd Seg Size Min`;
-
-    const blob = new Blob([templateContent], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "SentriX_Incident_Report_Template.txt";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    const name = (file.name || "").toLowerCase();
+    const isAccepted =
+      file.type === "application/pdf" ||
+      name.endsWith(".pdf") ||
+      name.endsWith(".docx") ||
+      name.endsWith(".docm");
+
+    if (!isAccepted) {
       setNotification({
         type: "error",
-        message: "Invalid format. Only structured PDF Incident Reports are accepted.",
+        message: "Invalid format. Upload the SentriX report template as PDF or Word (.docx).",
       });
       return;
     }
@@ -143,6 +127,7 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
     setIsValidating(true);
     setNotification(null);
 
+    // 1. التحقق من صيغة وهيكل التقرير الأمني
     const isStructureValid = await validateIncidentPDFContent(file);
     if (!isStructureValid) {
       setUploadedFile(null);
@@ -150,12 +135,13 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
       if (fileInputRef.current) fileInputRef.current.value = "";
       setNotification({
         type: "error",
-        message: "Invalid Incident Report format. The uploaded PDF does not contain required SentriX security metadata.",
+        message: "Invalid Incident Report format. The uploaded PDF does not contain required SentriX security metadata (Asset, Threat, IP, or Severity metrics).",
       });
       setIsValidating(false);
       return;
     }
 
+    // 2. حساب بصمة SHA-256 للملف
     const hash = await calculateFileSHA256(file);
     setUploadedFile(file);
     setFileHash(hash);
@@ -194,22 +180,10 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
     const generatedId = generateNextId();
     const now = new Date();
 
-    const fileNameLower = uploadedFile.name.toLowerCase();
-    let detectedSeverity = "Medium";
-    if (fileNameLower.includes("critical") || fileNameLower.includes("crit")) {
-      detectedSeverity = "Critical";
-    } else if (fileNameLower.includes("high")) {
-      detectedSeverity = "High";
-    } else if (fileNameLower.includes("low")) {
-      detectedSeverity = "Low";
-    } else if (fileNameLower.includes("medium") || fileNameLower.includes("med")) {
-      detectedSeverity = "Medium";
-    }
-
     const newIncident = {
       id: generatedId,
       title: "Pending AI Extraction",
-      severity: detectedSeverity,
+      severity: "High",
       status: "Open",
       source: "PDF Report",
       incident_type: "Automated Ingestion",
@@ -233,11 +207,11 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
       formData.append("analyst", currentAnalyst);
       formData.append("sha256", fileHash);
 
+      // الباك إند يحلل الملف ويرجع الحادثة بمعرّفها الحقيقي
       const result = await apiService.uploadIncidentPDF(formData);
       const realId = result?.incident?.id || generatedId;
-      const finalSeverity = result?.incident?.severity || detectedSeverity;
 
-      saveIncident({ ...newIncident, id: realId, severity: finalSeverity });
+      saveIncident({ ...newIncident, id: realId });
 
       setNotification({
         type: "success",
@@ -267,6 +241,7 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
       <div className="flex-1 min-w-0">
         <main className="min-h-screen px-8 py-8">
           <div className="max-w-3xl mx-auto">
+            {/* BACK */}
             <Link
               to="/incidents"
               className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-emerald-400 transition mb-6"
@@ -275,6 +250,7 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
               Back to Incidents
             </Link>
 
+            {/* MAIN CARD */}
             <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 shadow-2xl">
               <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2">Incident Intake Form</h1>
@@ -300,34 +276,63 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* ============ STEP 1 — DOWNLOAD THE TEMPLATE ============ */}
                 <div className="bg-[#070b16] border border-emerald-500/20 rounded-2xl p-5">
                   <div className="flex items-start gap-4">
                     <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                      <FileText size={21} className="text-emerald-400" />
+                      <FileType2 size={21} className="text-emerald-400" />
                     </div>
 
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <h2 className="text-sm font-semibold text-gray-200">
-                        Step 1 — Download the SentriX report template
+                        Step 1 — Download the blank SentriX report template
                       </h2>
-                      <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-                        The template contains the 37 network flow features the AI model
-                        needs. Fill in the values captured for your incident, keep the
-                        field names exactly as they are, then upload the completed file below.
+
+                      <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                        The template contains the{" "}
+                        <span className="text-gray-300">37 network flow features</span>{" "}
+                        the AI model needs. Download it, fill in the values captured for
+                        your incident, then upload the completed file in Step 2.
                       </p>
 
-                      <button
-                        type="button"
-                        onClick={handleDownloadTemplate}
-                        className="inline-flex items-center gap-2 mt-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/20 transition cursor-pointer"
-                      >
-                        <Download size={16} />
-                        Download Template File
-                      </button>
+                      <div className="mt-3 flex items-start gap-2 text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        <span>
+                          Keep the field names exactly as they appear — the engine matches
+                          them by name. If any of the 37 values is missing, the incident is
+                          scored from organizational context only and the AI model is not used.
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 mt-4">
+                        <a
+                          href={apiService.incidentTemplateDocxUrl()}
+                          className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition"
+                        >
+                          <Download size={16} />
+                          Download Word Template
+                        </a>
+
+                        <a
+                          href={apiService.incidentTemplateUrl()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/10 transition"
+                        >
+                          <FileText size={16} />
+                          Download PDF Template
+                        </a>
+                      </div>
+
+                      <p className="text-[11px] text-gray-600 mt-3">
+                        Word is easier to fill in and can be uploaded directly — no need to
+                        convert it to PDF.
+                      </p>
                     </div>
                   </div>
                 </div>
 
+                {/* ============ STEP 2 — UPLOAD ============ */}
                 <div>
                   <label className="text-sm font-semibold text-gray-300 mb-3 block">
                     Step 2 — Upload the completed report
@@ -350,15 +355,15 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
                       </div>
                       <div className="text-center">
                         <p className="text-base font-semibold text-gray-200 mb-1">
-                          {isValidating ? "Validating Report Structure..." : "Upload Incident Report"}
+                          {isValidating ? "Validating Report Structure..." : "Upload Completed Report"}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Click to select a standard security incident PDF
+                          Click to select your filled SentriX template (Word or PDF)
                         </p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
                         <AlertTriangle size={13} />
-                        <span>Strict validation: Only structured security reports are accepted</span>
+                        <span>Accepted: .docx and .pdf using the SentriX template structure</span>
                       </div>
                     </button>
                   ) : (
@@ -412,12 +417,13 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="application/pdf"
+                    accept=".pdf,.docx,.docm,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={handleFileChange}
                     className="hidden"
                   />
                 </div>
 
+                {/* ACTUAL INCIDENT TIME */}
                 <div>
                   <label className="text-sm font-semibold text-gray-300 mb-2 block">
                     Actual Incident Time <span className="text-red-400 ml-1">*</span>
@@ -437,6 +443,7 @@ Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets 
                   </p>
                 </div>
 
+                {/* BUTTONS */}
                 <div className="flex gap-3 pt-3">
                   <Link
                     to="/incidents"
