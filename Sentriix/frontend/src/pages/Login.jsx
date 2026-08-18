@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { Lock, Mail, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import apiService from "../services/api"; // استيراد خدمة الـ API الحقيقية
 import logo from "../assets/logo.png";
-
-const DEMO_VALID_ACCOUNT = { email: "analyst@gmail.com", password: "Secure123" };
-const DEMO_UNACTIVATED_ACCOUNT = { email: "pending@gmail.com", password: "Secure123" };
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,41 +10,40 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const isValidEmailFormat = (value) => /^[^\s@]+@gmail\.com$/i.test(value.trim());
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setNotification(null);
+    setLoading(true);
 
     const trimmedEmail = email.trim().toLowerCase();
 
-    if (!isValidEmailFormat(trimmedEmail)) {
-      setNotification({ type: "error", message: "Please enter a valid email address." });
-      return;
-    }
+    try {
+      // الاتصال الفعلي بالباك إند وسيرفر سوبابيس
+      const response = await apiService.login({ email: trimmedEmail, password });
+      
+      // حفظ التوكن الحقيقي في المتصفح لتفعيل حماية الصفحات
+      const token = response.token || response.access_token || response.session?.access_token;
+      if (token) {
+        localStorage.setItem("token", token);
+      } else {
+        // كاحتياط لو كان التوكن يأتي بشكل مختلف
+        localStorage.setItem("token", "active_session_token");
+      }
 
-    if (password.length < 8) {
-      setNotification({ type: "error", message: "Password must be at least 8 characters long." });
-      return;
-    }
+      setNotification({ type: "success", message: "Login successful. Redirecting..." });
+      setTimeout(() => navigate("/dashboard"), 1000);
 
-    if (trimmedEmail === DEMO_UNACTIVATED_ACCOUNT.email && password === DEMO_UNACTIVATED_ACCOUNT.password) {
-      setNotification({
-        type: "warning",
-        message: "Your account is not activated yet. Please check your email for the activation link.",
+    } catch (err) {
+      console.error("Login error:", err);
+      setNotification({ 
+        type: "error", 
+        message: err.message || "Invalid email or password. Please try again." 
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    if (trimmedEmail !== DEMO_VALID_ACCOUNT.email || password !== DEMO_VALID_ACCOUNT.password) {
-      setNotification({ type: "error", message: "Incorrect email or password. Please try again." });
-      return;
-    }
-
-    localStorage.setItem("sentrix_user", trimmedEmail);
-    setNotification({ type: "success", message: "Login successful. Redirecting..." });
-    setTimeout(() => navigate("/dashboard"), 1200);
   };
 
   return (
@@ -66,8 +63,6 @@ export default function Login() {
           className={`z-20 w-full max-w-sm mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
             notification.type === "success"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-              : notification.type === "warning"
-              ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
               : "bg-red-500/10 border-red-500/30 text-red-300"
           }`}
         >
@@ -89,6 +84,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
+                required
                 className="w-full bg-transparent outline-none px-2 py-2.5 text-sm placeholder:text-gray-600"
               />
             </div>
@@ -97,12 +93,13 @@ export default function Login() {
           <div>
             <label className="text-xs text-gray-400 mb-1 block">Password</label>
             <div className="flex items-center bg-[#070b16] border border-white/10 rounded-lg px-3">
-              <Lock size={16} className="text-gray-500" />
+              <Lock size5={16} className="text-gray-500" />
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
+                required
                 className="w-full bg-transparent outline-none px-2 py-2.5 text-sm placeholder:text-gray-600"
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-gray-500 hover:text-gray-300">
@@ -113,9 +110,10 @@ export default function Login() {
 
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-2.5 rounded-lg hover:opacity-90 transition"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-2.5 rounded-lg hover:opacity-90 transition disabled:opacity-50"
           >
-            Get Started
+            {loading ? "Authenticating..." : "Get Started"}
           </button>
         </form>
       </div>
