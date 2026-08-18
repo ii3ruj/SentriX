@@ -41,7 +41,6 @@ export default function IncidentDetail() {
         }
       } catch (err) {
         if (isMounted && !liveIncident) {
-          // لا نعرض الخطأ مباشرة إلا إذا لم تكن هناك بيانات سابقة معروضة
           setError(err.message || "Could not load the incident.");
           setLoading(false);
         }
@@ -54,21 +53,13 @@ export default function IncidentDetail() {
     setError(null);
     fetchDetail();
 
-    // تم إيقاف الـ setInterval المزعج الذي كان يحدث تذبذباً ويطابق خطأ الـ 4 ثوانٍ
     return () => {
       isMounted = false;
     };
   }, [id]);
 
-  // جعل المطابقة مرنة جداً لكي لا تفقد البيانات الحقيقية أبداً
+  // تعريف واحد موحد وآمن لمتغير incident لمنع أخطاء التكرار
   const incident = liveIncident ? (liveIncident.incident || liveIncident) : null;
-
-  // مقارنة متسامحة: اختلاف حالة الأحرف أو المسافات كان يُسقط النتيجة
-  const sameId = (a, b) =>
-    String(a || "").trim().toUpperCase() === String(b || "").trim().toUpperCase();
-
-  const incident =
-    liveIncident && (sameId(liveIncident.id, id) || !id) ? liveIncident : null;
 
   return (
     <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
@@ -91,19 +82,11 @@ export default function IncidentDetail() {
         {/* ================= CONTENT ================= */}
         <main className="flex-1 overflow-y-auto p-8 max-w-3xl space-y-6">
           {!id ? (
-            /*
-             * هذا المكوّن هو صفحة تفاصيل حادثة واحدة، ولا يعمل إلا على
-             * مسار يحمل معرّفاً مثل /incidents/INC-0012.
-             * ظهوره على /incidents يعني أن ملف incidents.jsx (صفحة القائمة)
-             * استُبدل بمحتوى هذا الملف.
-             */
             <div className="bg-[#0c1220] border border-amber-500/20 rounded-2xl p-8 text-center space-y-3">
               <p className="text-gray-300">No incident selected.</p>
               <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
                 This is the incident detail view and needs an incident ID in the
                 URL (for example <span className="font-mono text-emerald-400">/incidents/INC-0012</span>).
-                If you reached this from the sidebar, the Incidents list page file
-                may have been overwritten.
               </p>
               <Link
                 to="/incidents"
