@@ -21,19 +21,28 @@ export default function Login() {
 
     try {
       const response = await apiService.login({ email: trimmedEmail, password });
-      
+
       let token = null;
       if (typeof response === "string") {
         token = response;
       } else if (response) {
-        token = response.token || response.access_token || response.session?.access_token || response.data?.token;
+        token =
+          response.token ||
+          response.access_token ||
+          response.session?.access_token ||
+          response.data?.token;
       }
 
-      localStorage.setItem("token", token || "sentrix_active_session_token");
-      localStorage.setItem("sentrix_user", trimmedEmail);
+      // بدون توكن حقيقي لا نُنشئ جلسة. التوكن الوهمي السابق كان يجعل
+      // كل طلب لاحق يرجع 401، فتعرض الصفحات بياناتها الوهمية.
+      if (!token) {
+        throw new Error("Login failed: the server did not return a session token.");
+      }
+
+      localStorage.setItem("token", token);
 
       setNotification({ type: "success", message: "Login successful. Redirecting..." });
-      setTimeout(() => navigate("/dashboard"), 1000);
+      setTimeout(() => navigate("/dashboard"), 800);
 
     } catch (err) {
       console.error("Login error:", err);
