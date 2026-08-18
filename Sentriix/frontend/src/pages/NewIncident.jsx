@@ -304,29 +304,20 @@ export default function NewIncident() {
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap gap-3 mt-4">
+                      <div className="mt-4">
                         <a
                           href={apiService.incidentTemplateDocxUrl()}
                           className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition"
                         >
                           <Download size={16} />
-                          Download Word Template
-                        </a>
-
-                        <a
-                          href={apiService.incidentTemplateUrl()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/10 transition"
-                        >
-                          <FileText size={16} />
-                          Download PDF Template
+                          Download Word Template (.docx)
                         </a>
                       </div>
 
-                      <p className="text-[11px] text-gray-600 mt-3">
-                        Word is easier to fill in and can be uploaded directly — no need to
-                        convert it to PDF.
+                      <p className="text-[11px] text-emerald-300/90 mt-3 leading-relaxed">
+                        After filling in the template, save or export it as a{" "}
+                        <span className="font-semibold">PDF</span> before uploading it in
+                        Step 2. In Word: File → Save As → choose PDF.
                       </p>
                     </div>
                   </div>
@@ -358,12 +349,12 @@ export default function NewIncident() {
                           {isValidating ? "Validating Report Structure..." : "Upload Completed Report"}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Click to select your filled SentriX template (Word or PDF)
+                          Click to select your completed SentriX template (PDF)
                         </p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
                         <AlertTriangle size={13} />
-                        <span>Accepted: .docx and .pdf using the SentriX template structure</span>
+                        <span>Upload the completed template as PDF — keep the field names unchanged</span>
                       </div>
                     </button>
                   ) : (
