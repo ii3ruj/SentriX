@@ -60,6 +60,8 @@ export default function Sidebar() {
   ];
 
   const handleLogout = () => {
+    // كان يحذف مفتاحاً غير المستخدم في الحماية، فتبقى الجلسة فعّالة بعد الخروج
+    localStorage.removeItem("token");
     localStorage.removeItem("sentrix_user");
     navigate("/login");
   };
