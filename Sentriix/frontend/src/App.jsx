@@ -12,12 +12,28 @@ import Recommendations from "./pages/Recommendations";
 import CRSIRecommendations from "./pages/CRSIRecommendations";
 import Archive from "./pages/Archive";
 import TeamConnection from "./pages/TeamConnection";
+import { Routes, Route } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        
+      {/* مسارات عامة */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
+      {/* مسارات محمية (Default-Deny) */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/incidents" element={<Incidents />} />
+        <Route path="/archive" element={<Archive />} />
+        {/* ... ضعي كل صفحاتك المحمية هنا ... */}
+      </Route>
+    </Routes>
+  );
+}
         {/* =========================
             HOME / LOGIN
         ========================= */}
