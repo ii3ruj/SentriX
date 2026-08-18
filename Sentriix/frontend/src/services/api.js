@@ -13,7 +13,7 @@ const BASE_URL =
 
 export { BASE_URL };
 
-// دالة مساعدة عامة للطلبات
+// دالة مساعدة عامة للطلبات (مزودة بحماية الـ 401 المركزية)
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem("token");
   const headers = {
@@ -24,6 +24,15 @@ async function request(endpoint, options = {}) {
 
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+    
+    // 🔒 [نقطة التفتيش المركزية - Server-Side Auth Check]
+    if (res.status === 401) {
+      console.warn("Session expired or unauthorized. Redirecting to login...");
+      localStorage.removeItem("token"); // تدمير الجلسة محلياً
+      window.location.href = "/login";  // الطرد الفوري لصفحة الدخول
+      return; 
+    }
+
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -35,6 +44,17 @@ async function request(endpoint, options = {}) {
 }
 
 export const apiService = {
+  
+  // 🔒 Authentication (New)
+  login: (credentials) => 
+    request("/api/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
+  register: (userData) => 
+    request("/api/auth/register", { method: "POST", body: JSON.stringify(userData) }),
+  logout: () => {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  },
+
   // 1. Dashboard Stats
   // يرجع: { attackTypes, totals, severityCounts, trends, crsi }
   getDashboardStats: () => request("/api/dashboard/stats"),
@@ -48,7 +68,7 @@ export const apiService = {
       body: JSON.stringify(incidentData),
     }),
 
-  // رفع تقارير PDF وتحليلها
+  // رفع تقارير PDF وتحليلها (مزودة بحماية الـ 401)
   // الحقول المتوقعة في FormData: file, incident_id, actual_time, analyst, sha256
   uploadIncidentPDF: async (formData) => {
     const token = localStorage.getItem("token");
@@ -59,6 +79,15 @@ export const apiService = {
       },
       body: formData, // FormData لا يحتاج تحديد Content-Type يدوياً
     });
+
+    // 🔒 [نقطة التفتيش لرفع الملفات]
+    if (res.status === 401) {
+      console.warn("Session expired or unauthorized. Redirecting to login...");
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+      return;
+    }
+
     if (!res.ok) throw new Error("Failed to upload and analyze PDF");
     return await res.json();
   },
