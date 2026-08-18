@@ -127,7 +127,12 @@ export default function Login() {
         </form>
       </div>
 
-      <p className="text-xs text-gray-600 mt-8 z-10">© 2026 SentriX. All rights reserved.</p>
+      <p className="text-[11px] text-gray-600 mt-6 z-10 text-center">
+        Accounts: <span className="font-mono text-gray-500">analyst@sentrix.com</span> ·{" "}
+        <span className="font-mono text-gray-500">admin@sentrix.com</span>
+      </p>
+
+      <p className="text-xs text-gray-600 mt-4 z-10">© 2026 SentriX. All rights reserved.</p>
     </div>
   );
 }
