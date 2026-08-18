@@ -127,10 +127,9 @@ function getGeneratedReports() {
 function downloadReport(report) {
   // تقارير الحوادث لها PDF رسمي مولّد ومؤرشف في الباك إند
   if (!report.isCrsi && report.incidentId) {
-    window.open(
-      `${API_BASE}/api/archive/${report.incidentId}/download`,
-      "_blank"
-    );
+    // يمر عبر apiService حتى يُضاف التوكن إلى الرابط،
+    // وإلا يرد الباك إند "Unauthorized: Missing or invalid token".
+    window.open(apiService.archiveDownloadUrl(report.incidentId), "_blank");
     return;
   }
 
