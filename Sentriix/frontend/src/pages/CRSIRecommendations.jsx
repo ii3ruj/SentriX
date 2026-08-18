@@ -62,7 +62,8 @@ const DEFAULT_RECOMMENDATIONS = [
 export default function CRSIRecommendations() {
   const navigate = useNavigate();
 
-  const [securityScore, setSecurityScore] = useState(68);
+  const [securityScore, setSecurityScore] = useState(0);
+  const [maturityLevel, setMaturityLevel] = useState(null);
   const [breakdown, setBreakdown] = useState(DEFAULT_BREAKDOWN);
   const [recommendations, setRecommendations] = useState(DEFAULT_RECOMMENDATIONS);
   const [recommendedPlaybook, setRecommendedPlaybook] = useState("ENDPOINT_SECURITY_PLAYBOOK");
@@ -74,12 +75,11 @@ export default function CRSIRecommendations() {
       try {
         const crsiData = await apiService.getCRSIRecommendations();
         if (isMounted && crsiData) {
-          if (crsiData.score) setSecurityScore(crsiData.score);
-          if (crsiData.breakdown) setBreakdown(crsiData.breakdown);
+          if (typeof crsiData.score === "number") setSecurityScore(crsiData.score);
+          if (crsiData.maturity_level) setMaturityLevel(crsiData.maturity_level);
+          if (Array.isArray(crsiData.breakdown)) setBreakdown(crsiData.breakdown);
           if (crsiData.playbook) setRecommendedPlaybook(crsiData.playbook);
-          if (crsiData.actions && Array.isArray(crsiData.actions)) {
-            setRecommendations(crsiData.actions);
-          }
+          if (Array.isArray(crsiData.actions)) setRecommendations(crsiData.actions);
         }
       } catch (err) {
         console.warn("Using fallback CRSI recommendations:", err);
@@ -87,8 +87,10 @@ export default function CRSIRecommendations() {
     };
 
     fetchCRSIInfo();
+    const interval = setInterval(fetchCRSIInfo, 5000);
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 
@@ -109,37 +111,34 @@ export default function CRSIRecommendations() {
     return "bg-gray-500/10 text-gray-400 border border-gray-500/20";
   };
 
-  const handleGenerateReport = () => {
-    const newCrsiReport = {
-      id: `RPT-CRSI-${String(Date.now()).slice(-4)}`,
-      incidentId: null,
-      title: "CRSI Assessment & Security Posture Report",
-      type: "CRSI Report",
-      isCrsi: true,
-      archivedAt: new Date().toISOString().replace("T", " ").slice(0, 16),
-      sha256: "a69f73cca23a9ac5c8b567dc185a756e97a9fb4347029006b3b790acffb0a3f7",
-      archivedBy: "SecOps Lead (CRSI Module)",
-      retentionUntil: "2033-08-17",
-      content: {
-        overallScore: `${(securityScore / 10).toFixed(1)} / 10`,
-        maturityLevel: securityScore >= 70 ? "Mature" : "Moderate",
-        people: "7.0 / 10",
-        process: "6.5 / 10",
-        technology: `${(securityScore / 10).toFixed(1)} / 10`,
-        playbook: recommendedPlaybook,
-        breakdownList: breakdown,
-      },
-    };
+  const handleGenerateReport = async () => {
+    const confirmed = window.confirm(
+      `Generate and archive the CRSI assessment report?\n\n` +
+        `Security score: ${securityScore}/100\n` +
+        `Maturity level: ${maturityLevel || "-"}\n\n` +
+        `The report is archived as an immutable snapshot with a SHA-256 fingerprint.`
+    );
+    if (!confirmed) return;
 
     try {
-      const stored = JSON.parse(localStorage.getItem("sentrix_archived_reports") || "[]");
-      stored.unshift(newCrsiReport);
-      localStorage.setItem("sentrix_archived_reports", JSON.stringify(stored));
-    } catch (e) {
-      console.error(e);
-    }
+      // الأرشيف مصدره الباك إند، لا localStorage
+      const rows = await apiService.getArchivedIncidents();
+      const crsiRow = (rows || []).find((r) => r.type === "CRSI Report");
 
-    navigate("/archive");
+      window.alert(
+        crsiRow
+          ? `CRSI report archived.\n\n` +
+            `Report ID: ${crsiRow.report_id}\n` +
+            `SHA-256: ${String(crsiRow.sha256 || "").slice(0, 32)}...\n` +
+            `Archived by: ${crsiRow.archived_by}\n` +
+            `Retention until: ${crsiRow.retention_until}`
+          : "CRSI report archived."
+      );
+
+      navigate("/archive");
+    } catch (e) {
+      window.alert(`Could not archive the CRSI report: ${e.message}`);
+    }
   };
 
   return (
@@ -174,7 +173,15 @@ export default function CRSIRecommendations() {
             <div className="grid md:grid-cols-3 gap-6">
               <div>
                 <p className="text-xs text-gray-500 mb-2">Security Score</p>
-                <p className="text-3xl font-bold text-emerald-400">
+                <p
+                  className={`text-3xl font-bold ${
+                    securityScore >= 70
+                      ? "text-emerald-400"
+                      : securityScore >= 40
+                      ? "text-yellow-400"
+                      : "text-red-400"
+                  }`}
+                >
                   {securityScore}
                   <span className="text-sm text-gray-500"> / 100</span>
                 </p>
@@ -182,8 +189,23 @@ export default function CRSIRecommendations() {
 
               <div>
                 <p className="text-xs text-gray-500 mb-2">Security Posture</p>
-                <p className="text-lg font-semibold text-emerald-400">
-                  {securityScore >= 70 ? "Strong Posture" : "Good / Moderate"}
+                <p
+                  className={`text-lg font-semibold ${
+                    securityScore >= 70
+                      ? "text-emerald-400"
+                      : securityScore >= 40
+                      ? "text-yellow-400"
+                      : "text-red-400"
+                  }`}
+                >
+                  {maturityLevel ||
+                    (securityScore >= 80
+                      ? "Strong"
+                      : securityScore >= 60
+                      ? "Moderate"
+                      : securityScore >= 40
+                      ? "Weak"
+                      : "Critical")}
                 </p>
               </div>
 
@@ -308,7 +330,13 @@ export default function CRSIRecommendations() {
 
                       <div className="h-1.5 bg-[#172130] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            item.score >= 70
+                              ? "bg-emerald-500"
+                              : item.score >= 40
+                              ? "bg-yellow-500"
+                              : "bg-red-500"
+                          }`}
                           style={{ width: `${item.score}%` }}
                         />
                       </div>
