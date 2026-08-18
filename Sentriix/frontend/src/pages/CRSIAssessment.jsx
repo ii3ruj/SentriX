@@ -35,6 +35,7 @@ export default function CRSIAssessment() {
   const [dailyScores, setDailyScores] = useState(DEFAULT_DAILY_SCORES);
   const [selectedDay, setSelectedDay] = useState(DEFAULT_DAILY_SCORES[0]);
   const [breakdown, setBreakdown] = useState(DEFAULT_BREAKDOWN);
+  const [maturityLevel, setMaturityLevel] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,6 +51,7 @@ export default function CRSIAssessment() {
           if (data.breakdown && Array.isArray(data.breakdown) && data.breakdown.length > 0) {
             setBreakdown(data.breakdown);
           }
+          if (data.maturity_level) setMaturityLevel(data.maturity_level);
         }
       } catch (err) {
         console.warn("Using fallback CRSI assessment data:", err);
@@ -176,7 +178,7 @@ export default function CRSIAssessment() {
 
               <div className="text-center">
                 <p className={`text-xl font-semibold ${scoreStatus.className}`}>
-                  {scoreStatus.label}
+                  {maturityLevel || scoreStatus.label}
                 </p>
                 <p className="text-xs text-gray-500 mt-2">
                   Current security resilience level
@@ -223,7 +225,13 @@ export default function CRSIAssessment() {
 
                     <div className="w-full h-2 bg-[#172130] rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full transition-all duration-500"
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          item.score >= 70
+                            ? "bg-gradient-to-r from-emerald-500 to-green-400"
+                            : item.score >= 40
+                            ? "bg-gradient-to-r from-yellow-500 to-amber-400"
+                            : "bg-gradient-to-r from-red-600 to-red-400"
+                        }`}
                         style={{ width: `${item.score}%` }}
                       />
                     </div>
@@ -261,7 +269,17 @@ export default function CRSIAssessment() {
                     {day.score}
                     <span className="text-xs text-gray-600"> / 100</span>
                   </p>
-                  <p className="text-xs text-emerald-400 mt-2">{day.status}</p>
+                  <p
+                    className={`text-xs mt-2 ${
+                      day.score >= 70
+                        ? "text-emerald-400"
+                        : day.score >= 40
+                        ? "text-yellow-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {day.status}
+                  </p>
                 </button>
               ))}
             </div>
@@ -325,7 +343,7 @@ function ScoreCircle({ score }) {
           cy="100"
           r={radius}
           fill="none"
-          stroke="#22c55e"
+          stroke={score >= 70 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444"}
           strokeWidth="13"
           strokeLinecap="round"
           strokeDasharray={circumference}
