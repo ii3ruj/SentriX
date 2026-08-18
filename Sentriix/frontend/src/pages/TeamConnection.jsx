@@ -51,6 +51,17 @@ const TEAM_MEMBERS = [
 const MOCK_INCOMING_MESSAGES = [
   {
     id: "MSG-SEED-001",
+    senderId: "admin",
+    senderName: "Ruba Aljuhani",
+    senderRole: "SOC Manager & IR Admin",
+    recipientId: "forensics",
+    itemLabel: "INC-218",
+    itemDetail: "Auto Simulated Brute Force",
+    message: "Initial triage completed. The source IP is repeatedly targeting the authentication portal. The incident has been escalated to Digital Forensics for further investigation, evidence preservation, and analysis of the affected account activity.",
+    sentAt: "2026-08-19 02:10 AM",
+  },
+  {
+    id: "MSG-SEED-002",
     senderId: "analyst1",
     senderName: "Fatima Salem Baobayd",
     senderRole: "SOC Tier 1 Analyst",
@@ -61,7 +72,7 @@ const MOCK_INCOMING_MESSAGES = [
     sentAt: "2026-08-19 02:10 AM",
   },
   {
-    id: "MSG-SEED-002",
+    id: "MSG-SEED-003",
     senderId: "analyst2",
     senderName: "Remas Jamaan AlZhrani",
     senderRole: "SOC Tier 2 Analyst",
@@ -72,7 +83,7 @@ const MOCK_INCOMING_MESSAGES = [
     sentAt: "2026-08-19 01:45 AM",
   },
   {
-    id: "MSG-SEED-003",
+    id: "MSG-SEED-004",
     senderId: "forensics",
     senderName: "Razan Abdullah Alghamdi",
     senderRole: "Digital Forensics Specialist",
