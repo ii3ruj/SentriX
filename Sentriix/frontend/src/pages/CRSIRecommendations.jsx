@@ -1,98 +1,144 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   BookOpen,
-  CheckCircle2,
-  Clock3,
-  Gauge,
+  ArrowLeft,
   FileText,
-  ShieldCheck,
+  Download,
+  ShieldAlert,
+  CheckCircle2,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
-const DEFAULT_BREAKDOWN = [
-  { name: "Identify & Access", score: 68 },
-  { name: "Network Security", score: 72 },
-  { name: "Endpoint Security", score: 64 },
-  { name: "Detect & Respond", score: 68 },
-  { name: "Backup & Recovery", score: 60 },
-  { name: "NCA Controls", score: 70 },
-];
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
 
 const DEFAULT_RECOMMENDATIONS = [
   {
     id: 1,
-    title: "Review endpoint protection coverage",
-    description: "Review endpoint security coverage and identify systems that are not adequately protected.",
+    title: "Isolate affected host",
+    description: "Disconnect the affected host from the network to prevent further spread.",
     priority: "High",
-    status: "Pending",
+    status: "Completed",
   },
   {
     id: 2,
-    title: "Investigate unresolved endpoint alerts",
-    description: "Review unresolved endpoint security alerts and determine whether additional investigation is required.",
+    title: "Block malicious IP",
+    description: "Add identified malicious IP addresses to the firewall blocklist.",
     priority: "High",
-    status: "Pending",
+    status: "Completed",
   },
   {
     id: 3,
-    title: "Update endpoint security controls",
-    description: "Review and strengthen endpoint security controls across organizational assets.",
+    title: "Terminate malicious processes",
+    description: "Stop suspicious processes related to the detected ransomware activity.",
     priority: "Medium",
-    status: "Pending",
+    status: "Completed",
   },
   {
     id: 4,
-    title: "Review endpoint configuration",
-    description: "Assess endpoint configurations and identify security weaknesses that may reduce the organization's security posture.",
+    title: "Collect and preserve logs",
+    description: "Collect endpoint, network, authentication, and security logs for investigation.",
     priority: "Medium",
     status: "Pending",
   },
   {
     id: 5,
-    title: "Verify security monitoring coverage",
-    description: "Verify that critical endpoints are properly monitored and security events are being collected.",
+    title: "Identify affected files",
+    description: "Identify encrypted, modified, or otherwise affected files and directories.",
     priority: "Medium",
+    status: "Pending",
+  },
+  {
+    id: 6,
+    title: "Reset compromised credentials",
+    description: "Reset credentials associated with potentially compromised accounts.",
+    priority: "High",
+    status: "Pending",
+  },
+  {
+    id: 7,
+    title: "Scan connected systems",
+    description: "Perform security scans across connected systems to identify additional compromise.",
+    priority: "Medium",
+    status: "Pending",
+  },
+  {
+    id: 8,
+    title: "Restore affected services",
+    description: "Restore affected systems and services after confirming the environment is clean.",
+    priority: "Low",
     status: "Pending",
   },
 ];
 
-export default function CRSIRecommendations() {
+export default function Recommendations() {
   const navigate = useNavigate();
+  const { id } = useParams();
 
-  const [securityScore, setSecurityScore] = useState(0);
-  const [maturityLevel, setMaturityLevel] = useState(null);
-  const [breakdown, setBreakdown] = useState(DEFAULT_BREAKDOWN);
-  const [recommendations, setRecommendations] = useState(DEFAULT_RECOMMENDATIONS);
-  const [recommendedPlaybook, setRecommendedPlaybook] = useState("ENDPOINT_SECURITY_PLAYBOOK");
+  const [incident, setIncident] = useState({
+    id: id || "",
+    title: "Ransomware detected on Server-01",
+    severity: "Critical",
+    riskScore: 87,
+    playbook: "RANSOMWARE_RESPONSE_PLAYBOOK",
+  });
+
+  const [recommendationsList, setRecommendationsList] = useState(DEFAULT_RECOMMENDATIONS);
+  const [isArchiving, setIsArchiving] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchCRSIInfo = async () => {
+    const fetchIncidentAIRecommendations = async () => {
       try {
-        const crsiData = await apiService.getCRSIRecommendations();
-        if (isMounted && crsiData) {
-          if (typeof crsiData.score === "number") setSecurityScore(crsiData.score);
-          if (crsiData.maturity_level) setMaturityLevel(crsiData.maturity_level);
-          if (Array.isArray(crsiData.breakdown)) setBreakdown(crsiData.breakdown);
-          if (crsiData.playbook) setRecommendedPlaybook(crsiData.playbook);
-          if (Array.isArray(crsiData.actions)) setRecommendations(crsiData.actions);
+        // بلا معرّف في الرابط كانت الصفحة تفترض INC-0001 وهو قد لا يكون
+        // موجوداً، فيرجع الأرشيف "Not found". الآن نأخذ أحدث حادثة فعلية.
+        let targetId = id;
+        if (!targetId) {
+          const latest = await apiService.getRecommendations();
+          targetId = latest?.incident_id;
+          if (!targetId) return;
+        }
+
+        const incidentData = await apiService.getIncidentById(targetId);
+        if (isMounted && incidentData) {
+          setIncident({
+            id: incidentData.id || targetId,
+            title: incidentData.title || "Security Incident",
+            severity: incidentData.severity || "Medium",
+            riskScore: incidentData.risk_score ?? 0,
+            playbook: incidentData.playbook || "GENERIC_RESPONSE_PLAYBOOK",
+          });
+
+          // الباك إند يرسل recommended_actions لكل حادثة حسب الـplaybook الخاص بها
+          if (Array.isArray(incidentData.recommended_actions)) {
+            const mapped = incidentData.recommended_actions.map((act, index) => ({
+              id: act.action_order || index + 1,
+              title: typeof act === "string" ? act : act.title,
+              description:
+                typeof act === "string"
+                  ? "Response action from the matched playbook."
+                  : act.description,
+              priority: typeof act === "string" ? "Medium" : act.priority,
+              status: typeof act === "string" ? "Pending" : act.status,
+            }));
+            setRecommendationsList(mapped);
+          }
         }
       } catch (err) {
-        console.warn("Using fallback CRSI recommendations:", err);
+        console.warn("Using fallback recommendations:", err);
       }
     };
 
-    fetchCRSIInfo();
-    const interval = setInterval(fetchCRSIInfo, 5000);
+    fetchIncidentAIRecommendations();
+    const interval = setInterval(fetchIncidentAIRecommendations, 8000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [id]);
 
   const getPriorityStyle = (priority) => {
     if (priority === "High" || priority === "Critical") {
@@ -112,32 +158,42 @@ export default function CRSIRecommendations() {
   };
 
   const handleGenerateReport = async () => {
+    if (!incident.id) {
+      window.alert("No incident is loaded yet. Please wait for the analysis to load.");
+      return;
+    }
+
     const confirmed = window.confirm(
-      `Generate and archive the CRSI assessment report?\n\n` +
-        `Security score: ${securityScore}/100\n` +
-        `Maturity level: ${maturityLevel || "-"}\n\n` +
-        `The report is archived as an immutable snapshot with a SHA-256 fingerprint.`
+      `Generate and archive the report for ${incident.id}?\n\n` +
+      `The report will be stored as an immutable snapshot with a SHA-256 ` +
+      `integrity fingerprint and retained for 7 years.`
     );
     if (!confirmed) return;
 
+    setIsArchiving(true);
+
     try {
-      // يُخزَّن فعلياً في الباك إند (سجل archives + لقطة مجمّدة)
-      const result = await apiService.archiveCRSIReport();
-      const row = result?.archived;
+      // يمر عبر apiService حتى يُرسل هيدر المصادقة.
+      // الطلب المباشر بـ fetch كان يصل بلا توكن فيرجع 401،
+      // وهذا سبب رسالة "Could not reach the archive service".
+      const verification = await apiService.verifyArchiveHash(incident.id);
+
+      window.open(apiService.archiveDownloadUrl(incident.id), "_blank");
 
       window.alert(
-        row
-          ? `CRSI report archived.\n\n` +
-            `Report ID: ${row.report_id}\n` +
-            `SHA-256: ${String(row.sha256 || "").slice(0, 32)}...\n` +
-            `Archived by: ${row.archived_by}\n` +
-            `Retention until: ${row.retention_until}`
-          : "CRSI report archived."
+        `Report archived successfully.\n\n` +
+          `Report ID: ${incident.id}\n` +
+          `SHA-256: ${String(verification.stored_sha256 || "").slice(0, 32)}...\n` +
+          `Integrity verified: ${verification.integrity_ok ? "PASSED" : "FAILED"}\n` +
+          `Archived by: ${verification.archived_by || "SentriX Engine"}\n` +
+          `Retention until: ${verification.retention_until || "-"}`
       );
 
       navigate("/archive");
     } catch (e) {
-      window.alert(`Could not archive the CRSI report: ${e.message}`);
+      window.alert(`Could not archive the report: ${e.message}`);
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -146,82 +202,72 @@ export default function CRSIRecommendations() {
       {/* UNIFIED SIDEBAR */}
       <Sidebar />
 
-      {/* MAIN */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 min-w-0">
         {/* HEADER */}
         <header className="px-8 py-7 border-b border-white/10">
           <div className="flex items-center gap-3 mb-2">
             <button
-              onClick={() => navigate("/crsi-assessment")}
+              onClick={() => navigate(`/ai-analysis/${incident.id}`)}
               className="text-gray-500 hover:text-emerald-400 transition"
             >
               <ArrowLeft size={18} />
             </button>
-            <span className="text-sm text-emerald-400">CRSI</span>
+            <span className="text-sm text-gray-500">AI Analysis</span>
+            <span className="text-gray-700">/</span>
+            <span className="text-sm text-emerald-400">Recommendations</span>
           </div>
 
-          <h1 className="text-3xl font-bold">Security Recommendations</h1>
+          <h1 className="text-3xl font-bold">Recommendations</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Recommendations generated from the organization's security score and score breakdown.
+            AI-driven response recommendations and mitigation playbooks for the selected incident
           </p>
         </header>
 
         {/* CONTENT */}
         <div className="p-8 max-w-[1250px] mx-auto">
-          {/* SECURITY SCORE SUMMARY */}
-          <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-6 mb-5">
-            <div className="grid md:grid-cols-3 gap-6">
+          {/* INCIDENT SUMMARY */}
+          <section className="bg-[#0c1220] border border-white/10 rounded-2xl px-6 py-5 mb-5">
+            <div className="grid grid-cols-4 gap-6">
               <div>
-                <p className="text-xs text-gray-500 mb-2">Security Score</p>
-                <p
-                  className={`text-3xl font-bold ${
-                    securityScore >= 70
-                      ? "text-emerald-400"
-                      : securityScore >= 40
-                      ? "text-yellow-400"
-                      : "text-red-400"
+                <p className="text-xs text-gray-500 mb-2">Incident ID</p>
+                <p className="font-bold text-white font-mono">{incident.id}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Title</p>
+                <p className="font-semibold text-gray-200">{incident.title}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Severity</p>
+                <span
+                  className={`inline-flex px-3 py-1 rounded-md text-xs font-semibold ${
+                    incident.severity === "Critical"
+                      ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                      : "bg-yellow-500/10 border border-yellow-500/20 text-yellow-400"
                   }`}
                 >
-                  {securityScore}
+                  {incident.severity}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Risk Score</p>
+                <p className="text-lg font-bold text-yellow-400">
+                  {incident.riskScore}
                   <span className="text-sm text-gray-500"> / 100</span>
                 </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Security Posture</p>
-                <p
-                  className={`text-lg font-semibold ${
-                    securityScore >= 70
-                      ? "text-emerald-400"
-                      : securityScore >= 40
-                      ? "text-yellow-400"
-                      : "text-red-400"
-                  }`}
-                >
-                  {maturityLevel ||
-                    (securityScore >= 80
-                      ? "Strong"
-                      : securityScore >= 60
-                      ? "Moderate"
-                      : securityScore >= 40
-                      ? "Weak"
-                      : "Critical")}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Recommendation Source</p>
-                <p className="text-sm text-gray-300">CRSI Resilience & NCA Engine</p>
               </div>
             </div>
           </section>
 
-          {/* TWO COLUMNS */}
-          <div className="grid lg:grid-cols-[1fr_300px] gap-5">
+          {/* TWO COLUMN LAYOUT */}
+          <div className="grid lg:grid-cols-[1fr_280px] gap-5">
             {/* LEFT COLUMN */}
             <div className="space-y-5">
-              {/* PLAYBOOK */}
-              <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-6">
+              {/* RECOMMENDED PLAYBOOK */}
+              <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-5">
                 <div className="flex items-start gap-4">
                   <div className="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
                     <BookOpen size={21} className="text-purple-400" />
@@ -229,133 +275,86 @@ export default function CRSIRecommendations() {
 
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Recommended Playbook</p>
-                    <h2 className="text-purple-400 font-bold text-base">{recommendedPlaybook}</h2>
+                    <h2 className="text-purple-400 font-bold text-base">
+                      {incident.playbook}
+                    </h2>
                     <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                      This playbook is selected based on the lowest score indicators in your organization's resilience profile.
+                      This response playbook is automatically generated based on AI threat scoring, isolation forest classification, and organizational CRSI posture.
                     </p>
                   </div>
                 </div>
-              </section>
 
-              {/* ACTIONS */}
-              <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h2 className="text-lg font-semibold">Recommended Actions</h2>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Actions recommended to improve the organization's security posture.
-                    </p>
-                  </div>
-                  <span className="text-xs text-gray-500">{recommendations.length} actions</span>
+                {/* Actions Heading */}
+                <div className="flex items-center justify-between mt-7 mb-4">
+                  <h3 className="font-semibold">
+                    Recommended Actions
+                    <span className="text-gray-500 ml-1">({recommendationsList.length})</span>
+                  </h3>
                 </div>
 
+                {/* Actions */}
                 <div className="space-y-3">
-                  {recommendations.map((item) => (
+                  {recommendationsList.map((recommendation) => (
                     <div
-                      key={item.id}
-                      className="bg-[#070b16] border border-white/5 rounded-xl p-4 hover:border-emerald-500/20 transition"
+                      key={recommendation.id}
+                      className="bg-[#070b16] border border-white/5 rounded-xl px-4 py-4 hover:border-emerald-500/20 transition"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="w-6 text-xs text-gray-500 font-semibold">{item.id}.</div>
+                        <div className="w-6 text-xs text-gray-500 font-semibold shrink-0">
+                          {recommendation.id}.
+                        </div>
 
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-gray-200">{item.title}</p>
-                          <p className="text-xs text-gray-600 mt-1">{item.description}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-200">
+                            {recommendation.title}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {recommendation.description}
+                          </p>
                         </div>
 
                         <span
                           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold shrink-0 ${getPriorityStyle(
-                            item.priority
+                            recommendation.priority
                           )}`}
                         >
-                          {item.priority}
+                          {recommendation.priority}
                         </span>
 
                         <span
                           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold shrink-0 ${getStatusStyle(
-                            item.status
+                            recommendation.status
                           )}`}
                         >
-                          {item.status}
+                          {recommendation.status}
                         </span>
                       </div>
                     </div>
                   ))}
-                </div>
-              </section>
-
-              {/* GENERATE REPORT */}
-              <section className="bg-[#0c1220] border border-emerald-500/20 rounded-2xl p-6">
-                <div className="flex items-center justify-between gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                      <FileText size={21} className="text-emerald-400" />
-                    </div>
-
-                    <div>
-                      <h2 className="text-sm font-semibold text-gray-200">Generate CRSI Audit Report</h2>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Generate and cryptographically archive this CRSI security recommendations report.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleGenerateReport}
-                    className="flex items-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold text-sm px-5 py-3 rounded-lg hover:opacity-90 transition shrink-0 shadow-lg shadow-emerald-500/10"
-                  >
-                    <FileText size={17} />
-                    Generate Report
-                  </button>
                 </div>
               </section>
             </div>
 
             {/* RIGHT COLUMN */}
             <div className="space-y-5">
-              {/* BREAKDOWN */}
-              <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-5">
-                  <Gauge size={17} className="text-emerald-400" />
-                  <h3 className="font-semibold text-sm">Score Breakdown</h3>
-                </div>
-
-                <div className="space-y-5">
-                  {breakdown.map((item) => (
-                    <div key={item.name}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-gray-400">{item.name}</span>
-                        <span className="text-xs font-semibold">{item.score}</span>
-                      </div>
-
-                      <div className="h-1.5 bg-[#172130] rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            item.score >= 70
-                              ? "bg-emerald-500"
-                              : item.score >= 40
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                          }`}
-                          style={{ width: `${item.score}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* STATUS */}
               <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <Clock3 size={16} className="text-emerald-400" />
-                  <h3 className="font-semibold text-sm">Recommendation Status</h3>
+                  <FileText size={16} className="text-emerald-400" />
+                  <h3 className="font-semibold">Incident Report</h3>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <CheckCircle2 size={15} className="text-emerald-400" />
-                  <span>Recommendations calculated & synced</span>
-                </div>
+                <p className="text-xs text-gray-500 leading-relaxed mb-5">
+                  Generate a tamper-evident audit report with SHA-256 verification and archive it under the 4 SentriX Archiving Principles.
+                </p>
+
+                <button
+                  onClick={handleGenerateReport}
+                  disabled={isArchiving}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold text-sm py-3 rounded-lg hover:opacity-90 transition shadow-lg shadow-emerald-500/10 disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  {isArchiving ? "Archiving..." : "Generate & Archive Report"}
+                </button>
               </section>
             </div>
           </div>
