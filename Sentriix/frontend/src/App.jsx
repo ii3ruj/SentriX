@@ -12,151 +12,59 @@ import Recommendations from "./pages/Recommendations";
 import CRSIRecommendations from "./pages/CRSIRecommendations";
 import Archive from "./pages/Archive";
 import TeamConnection from "./pages/TeamConnection";
-import { Routes, Route } from 'react-router-dom';
-import ProtectedRoute from './components/ProtectedRoute';
+import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         
-      {/* مسارات عامة */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-
-      {/* مسارات محمية (Default-Deny) */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/incidents" element={<Incidents />} />
-        <Route path="/archive" element={<Archive />} />
-        {/* ... ضعي كل صفحاتك المحمية هنا ... */}
-      </Route>
-    </Routes>
-  );
-}
         {/* =========================
-            HOME / LOGIN
+            مسارات عامة (بدون تسجيل دخول)
         ========================= */}
-
-        <Route
-          path="/"
-          element={<Login />}
-        />
+        <Route path="/login" element={<Login />} />
+        {/* إذا كان لديك صفحة تسطير/تسجيل، أضيفيها هنا */}
 
         {/* =========================
-            LOGIN
+            مسارات محمية (Default-Deny)
         ========================= */}
+        <Route element={<ProtectedRoute />}>
+          
+          {/* HOME / DASHBOARD */}
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
 
-        <Route
-          path="/login"
-          element={<Login />}
-        />
+          {/* INCIDENTS */}
+          <Route path="/incidents" element={<Incidents />} />
+          <Route path="/incidents/:id" element={<IncidentDetail />} />
+          <Route path="/new-incident" element={<NewIncident />} />
 
-        {/* =========================
-            DASHBOARD
-        ========================= */}
+          {/* AI ANALYSIS */}
+          <Route path="/ai-analysis" element={<AIAnalysis />} />
+          <Route path="/ai-analysis/:id" element={<AIAnalysis />} />
 
-        <Route
-          path="/dashboard"
-          element={<Dashboard />}
-        />
+          {/* CRSI */}
+          <Route path="/crsi-assessment" element={<CRSIAssessment />} />
 
-        {/* =========================
-            INCIDENTS
-        ========================= */}
+          {/* RECOMMENDATIONS */}
+          <Route path="/recommendations" element={<Recommendations />} />
+          <Route path="/recommendations/:id" element={<Recommendations />} />
 
-        <Route
-          path="/incidents"
-          element={<Incidents />}
-        />
+          {/* CRSI RECOMMENDATIONS */}
+          <Route path="/crsi-recommendations" element={<CRSIRecommendations />} />
 
-        {/* View specific incident */}
+          {/* ARCHIVE */}
+          <Route path="/archive" element={<Archive />} />
 
-        <Route
-          path="/incidents/:id"
-          element={<IncidentDetail />}
-        />
+          {/* TEAM CONNECTION */}
+          <Route path="/team-connection" element={<TeamConnection />} />
 
-        {/* New Incident */}
-
-        <Route
-          path="/new-incident"
-          element={<NewIncident />}
-        />
-
-        {/* =========================
-            AI ANALYSIS
-        ========================= */}
-
-        <Route
-          path="/ai-analysis"
-          element={<AIAnalysis />}
-        />
-
-        <Route
-          path="/ai-analysis/:id"
-          element={<AIAnalysis />}
-        />
-
-        {/* =========================
-            CRSI
-        ========================= */}
-
-        <Route
-          path="/crsi-assessment"
-          element={<CRSIAssessment />}
-        />
-
-        {/* =========================
-            AI RISK SCORE
-            RECOMMENDATIONS
-        ========================= */}
-
-        <Route
-          path="/recommendations"
-          element={<Recommendations />}
-        />
-
-        <Route
-          path="/recommendations/:id"
-          element={<Recommendations />}
-        />
-
-        {/* =========================
-            CRSI RECOMMENDATIONS
-        ========================= */}
-
-        <Route
-          path="/crsi-recommendations"
-          element={<CRSIRecommendations />}
-        />
-
-        {/* =========================
-            ARCHIVE
-        ========================= */}
-
-        <Route
-          path="/archive"
-          element={<Archive />}
-        />
-
-        {/* =========================
-            TEAM CONNECTION
-        ========================= */}
-
-        <Route
-          path="/team-connection"
-          element={<TeamConnection />}
-        />
+        </Route>
 
         {/* =========================
             UNKNOWN ROUTE
         ========================= */}
-
-        <Route
-          path="*"
-          element={<Navigate to="/" replace />}
-        />
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </BrowserRouter>
