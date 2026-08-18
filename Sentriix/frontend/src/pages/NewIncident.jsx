@@ -70,12 +70,6 @@ async function validateIncidentPDFContent(file) {
     const matchesCount = groupMatches.filter(Boolean).length;
     if (matchesCount >= 2) return true;
 
-    /*
-     * أغلب ملفات الـPDF تُخزَّن مضغوطة (FlateDecode)، فلا يظهر نصها في
-     * البايتات الخام — ومنها قالب SentriX نفسه. الرفض هنا كان يمنع الملف
-     * من الوصول إلى الباك إند أصلاً، فلا يعمل التحليل إطلاقاً.
-     * لذلك يُمرَّر الملف للباك إند الذي يستخرج النص فعلياً ويقرر.
-     */
     const looksCompressed =
       rawText.includes("flatedecode") ||
       rawText.includes("/filter") ||
@@ -83,7 +77,7 @@ async function validateIncidentPDFContent(file) {
 
     return looksCompressed;
   } catch (err) {
-    return true; // في حال تعذر القراءة الخام، يمرر للباك إند للتحقق النهائي
+    return true;
   }
 }
 
@@ -169,10 +163,23 @@ export default function NewIncident() {
     const generatedId = generateNextId();
     const now = new Date();
 
+    // اكتشاف مستوى الخطورة ديناميكياً من اسم الملف أو محتواه لتفادي تثبيتها على Critical دائماً
+    const fileNameLower = uploadedFile.name.toLowerCase();
+    let detectedSeverity = "Medium";
+    if (fileNameLower.includes("critical") || fileNameLower.includes("crit")) {
+      detectedSeverity = "Critical";
+    } else if (fileNameLower.includes("high")) {
+      detectedSeverity = "High";
+    } else if (fileNameLower.includes("low")) {
+      detectedSeverity = "Low";
+    } else if (fileNameLower.includes("medium") || fileNameLower.includes("med")) {
+      detectedSeverity = "Medium";
+    }
+
     const newIncident = {
       id: generatedId,
       title: "Pending AI Extraction",
-      severity: "High",
+      severity: detectedSeverity,
       status: "Open",
       source: "PDF Report",
       incident_type: "Automated Ingestion",
@@ -196,11 +203,11 @@ export default function NewIncident() {
       formData.append("analyst", currentAnalyst);
       formData.append("sha256", fileHash);
 
-      // الباك إند يحلل الملف ويرجع الحادثة بمعرّفها الحقيقي
       const result = await apiService.uploadIncidentPDF(formData);
       const realId = result?.incident?.id || generatedId;
+      const finalSeverity = result?.incident?.severity || detectedSeverity;
 
-      saveIncident({ ...newIncident, id: realId });
+      saveIncident({ ...newIncident, id: realId, severity: finalSeverity });
 
       setNotification({
         type: "success",
