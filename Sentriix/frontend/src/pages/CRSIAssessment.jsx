@@ -12,21 +12,30 @@ import {
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
-const DEFAULT_DAILY_SCORES = [
-  { date: "Aug 17, 2026", score: 72, status: "Good" },
-  { date: "Aug 16, 2026", score: 68, status: "Good" },
-  { date: "Aug 15, 2026", score: 71, status: "Good" },
-  { date: "Aug 14, 2026", score: 74, status: "Good" },
-  { date: "Aug 13, 2026", score: 69, status: "Good" },
-];
+const generateDynamicDays = () => {
+  const days = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateString = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    days.push({
+      date: dateString,
+      score: i === 0 ? 91.4 : 72 - (i * 2),
+      status: "Good"
+    });
+  }
+  return days;
+};
+
+const DEFAULT_DAILY_SCORES = generateDynamicDays();
 
 const DEFAULT_BREAKDOWN = [
-  { name: "Identify & Access", score: 68 },
-  { name: "Network Security", score: 72 },
-  { name: "Endpoint Security", score: 64 },
-  { name: "Detect & Respond", score: 68 },
-  { name: "Backup & Recovery", score: 60 },
-  { name: "NCA Controls", score: 70 },
+  { name: "Identify & Access", score: 84.4 },
+  { name: "Network Security", score: 94 },
+  { name: "Endpoint Security", score: 96.4 },
+  { name: "Detect & Respond", score: 86.8 },
+  { name: "Backup & Recovery", score: 96.4 },
+  { name: "NCA Controls", score: 91.6 },
 ];
 
 export default function CRSIAssessment() {
@@ -104,7 +113,7 @@ export default function CRSIAssessment() {
 
   const scoreStatus = getScoreStatus(selectedDay.score);
   const previousDay = dailyScores[1] || dailyScores[0];
-  const scoreDifference = selectedDay.score - previousDay.score;
+  const scoreDifference = Number((selectedDay.score - previousDay.score).toFixed(1));
 
   return (
     <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
