@@ -11,8 +11,6 @@ import {
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
-const CURRENT_USER_ID = "analyst1";
-const CURRENT_USER_NAME = "Analyst One";
 
 const MOCK_INCIDENTS = [
   { id: "INC-0001", title: "Ransomware detected on Server-01", severity: "Critical" },
@@ -40,49 +38,51 @@ const MOCK_CRSI_SUMMARY = {
   maturityLevel: "Moderate",
 };
 
+const CURRENT_USER_ID = "admin";
+const CURRENT_USER_NAME = "Ruba Aljuhani";
+
 const TEAM_MEMBERS = [
-  { id: "analyst1", name: "Analyst One", role: "SOC Analyst" },
-  { id: "analyst2", name: "Analyst Two", role: "SOC Analyst" },
-  { id: "lead", name: "Sara Al-Otaibi", role: "SOC Team Lead" },
-  { id: "manager", name: "Omar Al-Harbi", role: "Security Manager" },
+  { id: "admin", name: "Ruba Aljuhani", role: "SOC Manager & IR Admin" },
+  { id: "analyst1", name: "Fatima Salem Baobayd", role: "SOC Tier 1 Analyst" },
+  { id: "analyst2", name: "Remas Jamaan AlZhrani", role: "SOC Tier 2 Analyst" },
+  { id: "forensics", name: "Razan Abdullah Alghamdi", role: "Digital Forensics Specialist" },
 ];
 
 const MOCK_INCOMING_MESSAGES = [
   {
     id: "MSG-SEED-001",
-    senderId: "manager",
-    senderName: "Omar Al-Harbi",
-    senderRole: "Security Manager",
-    recipientId: "analyst1",
-    itemLabel: "INC-0001",
-    itemDetail: "Ransomware detected on Server-01",
-    message: "Please confirm this incident has been fully contained and share an update by end of day.",
-    sentAt: "2026-08-13 09:15 AM",
+    senderId: "analyst1",
+    senderName: "Fatima Salem Baobayd",
+    senderRole: "SOC Tier 1 Analyst",
+    recipientId: "admin",
+    itemLabel: "INC-2182",
+    itemDetail: "Auto Simulated Brute Force",
+    message: "Initial triage completed. Source IP is hammering the auth portal. Escalated for your review, Admin.",
+    sentAt: "2026-08-19 02:10 AM",
   },
   {
     id: "MSG-SEED-002",
-    senderId: "lead",
-    senderName: "Sara Al-Otaibi",
-    senderRole: "SOC Team Lead",
-    recipientId: "analyst1",
-    itemLabel: "CRSI Security Score Report",
-    itemDetail: "6.8 / 10 — Moderate",
-    message: "Review the Process category answers before we present this to management next week.",
-    sentAt: "2026-08-12 04:40 PM",
+    senderId: "analyst2",
+    senderName: "Remas Jamaan AlZhrani",
+    senderRole: "SOC Tier 2 Analyst",
+    recipientId: "admin",
+    itemLabel: "INC-2178",
+    itemDetail: "Malware communication blocked",
+    message: "Deep packet inspection verified the C2 callback was successfully dropped by the firewall.",
+    sentAt: "2026-08-19 01:45 AM",
   },
   {
     id: "MSG-SEED-003",
-    senderId: "manager",
-    senderName: "Omar Al-Harbi",
-    senderRole: "Security Manager",
-    recipientId: "analyst1",
-    itemLabel: "INC-0005",
-    itemDetail: "Brute force attack detected",
-    message: "Escalate to the network team if the source IP hits the firewall again.",
-    sentAt: "2026-08-11 11:02 AM",
+    senderId: "forensics",
+    senderName: "Razan Abdullah Alghamdi",
+    senderRole: "Digital Forensics Specialist",
+    recipientId: "admin",
+    itemLabel: "CRSI Security Score Report",
+    itemDetail: "Overall Posture & Weak Control Domains",
+    message: "Forensic memory dump acquired from the affected cloud instance. Awaiting admin sign-off.",
+    sentAt: "2026-08-19 01:15 AM",
   },
 ];
-
 function getStoredHistory() {
   try {
     return JSON.parse(localStorage.getItem("sentrix_team_sends") || "[]");
