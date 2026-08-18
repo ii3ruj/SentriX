@@ -231,16 +231,16 @@ export default function Archive() {
     const fetchArchive = async () => {
       try {
         const liveArchived = await apiService.getArchivedIncidents();
-        if (isMounted && Array.isArray(liveArchived) && liveArchived.length > 0) {
+        if (isMounted && Array.isArray(liveArchived)) {
           const formatted = liveArchived.map((item, idx) => ({
             id: item.report_id || `RPT-000${idx + 1}`,
             incidentId: item.incident_id || item.incidentId || `INC-000${idx + 1}`,
             title: item.title || `Incident Report - ${item.incident_id || 'INC'}`,
             type: item.type || "Incident Report",
             archivedAt: item.archived_at || new Date().toISOString().replace("T", " ").slice(0, 16),
-            sha256: item.sha256 || "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            archivedBy: item.archived_by || "SecOps Analyst",
-            retentionUntil: item.retention_until || "2033-08-17",
+            sha256: item.sha256 || "",
+            archivedBy: item.archived_by || "SentriX Engine",
+            retentionUntil: item.retention_until || "-",
             storageType: "WORM (Immutable)",
             content: item.content || item,
           }));
@@ -271,15 +271,8 @@ export default function Archive() {
     }
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/archive/verify/${report.incidentId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        }
-      );
-      const data = await res.json();
+      // apiService يرسل هيدر المصادقة، والطلب المباشر كان يرجع 401
+      const data = await apiService.verifyArchiveHash(report.incidentId);
       if (data.integrity_ok) {
         setVerifiedId(report.id);
       } else {
@@ -290,7 +283,7 @@ export default function Archive() {
         );
       }
     } catch (e) {
-      window.alert("Could not reach the archive verification service.");
+      window.alert(`Could not verify the archive record: ${e.message}`);
     }
 
     setTimeout(() => setVerifiedId(null), 3500);
@@ -382,7 +375,7 @@ export default function Archive() {
                       <td className="py-3.5">
                         <div className="flex items-center gap-1.5">
                           <code className="text-[11px] font-mono bg-[#070b16] px-2 py-0.5 rounded border border-white/10 text-gray-400 max-w-[130px] truncate">
-                            {report.sha256 || "e3b0c44298fc1c149afbf4c8..."}
+                            {report.sha256 || "—"}
                           </code>
                           <button
                             onClick={() => handleVerify(report)}
