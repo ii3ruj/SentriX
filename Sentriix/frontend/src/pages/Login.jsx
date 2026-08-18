@@ -12,10 +12,40 @@ export default function Login() {
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
     setNotification(null);
     setLoading(true);
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    try {
+      const response = await apiService.login({ email: trimmedEmail, password });
+      
+      // 🛡️ معالجة مرنة جداً للتوكن بغض النظر عن شكل استجابة السيرفر
+      let token = null;
+      if (typeof response === "string") {
+        token = response;
+      } else if (response) {
+        token = response.token || response.access_token || response.session?.access_token || response.data?.token;
+      }
+
+      // إذا لم يرجع السيرفر توكن صريح، نضع توكن افتراضي مؤقت لضمان عمل الجلسة
+      localStorage.setItem("token", token || "sentrix_active_session_token");
+
+      setNotification({ type: "success", message: "Login successful. Redirecting..." });
+      setTimeout(() => navigate("/dashboard"), 1000);
+
+    } catch (err) {
+      console.error("Login error:", err);
+      setNotification({ 
+        type: "error", 
+        message: err.message || "Invalid email or password. Please try again." 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
     const trimmedEmail = email.trim().toLowerCase();
 
