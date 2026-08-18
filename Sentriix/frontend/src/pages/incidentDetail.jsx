@@ -26,11 +26,7 @@ export default function IncidentDetail() {
 
   useEffect(() => {
     let isMounted = true;
-    let attempts = 0;
 
-    // الصفحة كانت تجلب البيانات مرة واحدة وبلا حالة تحميل، فتعرض
-    // "Incident not found" فوراً قبل وصول الرد — وتبقى عليها لو فشل
-    // الطلب مرة واحدة (بدء بارد من Render مثلاً).
     const fetchDetail = async () => {
       if (!id) {
         setLoading(false);
@@ -38,32 +34,34 @@ export default function IncidentDetail() {
       }
       try {
         const data = await apiService.getIncidentById(id);
-        if (isMounted) {
+        if (isMounted && data) {
           setLiveIncident(data);
           setError(null);
           setLoading(false);
         }
       } catch (err) {
-        attempts += 1;
-        if (isMounted && attempts >= 3) {
+        if (isMounted && !liveIncident) {
+          // لا نعرض الخطأ مباشرة إلا إذا لم تكن هناك بيانات سابقة معروضة
           setError(err.message || "Could not load the incident.");
           setLoading(false);
         }
       }
     };
 
-    setLoading(true);
+    if (!liveIncident) {
+      setLoading(true);
+    }
     setError(null);
-    setLiveIncident(null);
     fetchDetail();
 
-    // إعادة محاولة قصيرة ثم تحديث دوري
-    const interval = setInterval(fetchDetail, 4000);
+    // تم إيقاف الـ setInterval المزعج الذي كان يحدث تذبذباً ويطابق خطأ الـ 4 ثوانٍ
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
   }, [id]);
+
+  // جعل المطابقة مرنة جداً لكي لا تفقد البيانات الحقيقية أبداً
+  const incident = liveIncident ? (liveIncident.incident || liveIncident) : null;
 
   // مقارنة متسامحة: اختلاف حالة الأحرف أو المسافات كان يُسقط النتيجة
   const sameId = (a, b) =>
