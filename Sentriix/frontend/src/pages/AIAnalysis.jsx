@@ -319,13 +319,13 @@ export default function AIAnalysis() {
               <Sparkles size={32} className="text-emerald-400 mx-auto mb-4" />
               <h2 className="text-lg font-bold mb-2">No Incident Selected</h2>
               <p className="text-sm text-gray-400 mb-6">
-                Please select an incident from the Incidents page to view its AI analysis.
+                Please select an incident from the Incidents page or create a new one to view its AI analysis.
               </p>
               <Link
                 to="/incidents"
                 className="inline-block bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold px-6 py-2.5 rounded-lg hover:opacity-90 transition text-sm"
               >
-                Go to Incidents
+                + New Incident
               </Link>
             </div>
           ) : (
