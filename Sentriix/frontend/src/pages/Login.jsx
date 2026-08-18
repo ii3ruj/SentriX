@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Lock, Mail, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import apiService from "../services/api"; // استيراد خدمة الـ API الحقيقية
+import apiService from "../services/api";
 import logo from "../assets/logo.png";
 
 export default function Login() {
@@ -12,7 +12,7 @@ export default function Login() {
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(false);
 
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setNotification(null);
     setLoading(true);
@@ -22,7 +22,6 @@ const handleSubmit = async (e) => {
     try {
       const response = await apiService.login({ email: trimmedEmail, password });
       
-      // 🛡️ معالجة مرنة جداً للتوكن بغض النظر عن شكل استجابة السيرفر
       let token = null;
       if (typeof response === "string") {
         token = response;
@@ -30,37 +29,7 @@ const handleSubmit = async (e) => {
         token = response.token || response.access_token || response.session?.access_token || response.data?.token;
       }
 
-      // إذا لم يرجع السيرفر توكن صريح، نضع توكن افتراضي مؤقت لضمان عمل الجلسة
       localStorage.setItem("token", token || "sentrix_active_session_token");
-
-      setNotification({ type: "success", message: "Login successful. Redirecting..." });
-      setTimeout(() => navigate("/dashboard"), 1000);
-
-    } catch (err) {
-      console.error("Login error:", err);
-      setNotification({ 
-        type: "error", 
-        message: err.message || "Invalid email or password. Please try again." 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-    const trimmedEmail = email.trim().toLowerCase();
-
-    try {
-      // الاتصال الفعلي بالباك إند وسيرفر سوبابيس
-      const response = await apiService.login({ email: trimmedEmail, password });
-      
-      // حفظ التوكن الحقيقي في المتصفح لتفعيل حماية الصفحات
-      const token = response.token || response.access_token || response.session?.access_token;
-      if (token) {
-        localStorage.setItem("token", token);
-      } else {
-        // كاحتياط لو كان التوكن يأتي بشكل مختلف
-        localStorage.setItem("token", "active_session_token");
-      }
 
       setNotification({ type: "success", message: "Login successful. Redirecting..." });
       setTimeout(() => navigate("/dashboard"), 1000);
@@ -123,7 +92,7 @@ const handleSubmit = async (e) => {
           <div>
             <label className="text-xs text-gray-400 mb-1 block">Password</label>
             <div className="flex items-center bg-[#070b16] border border-white/10 rounded-lg px-3">
-              <Lock size5={16} className="text-gray-500" />
+              <Lock size={16} className="text-gray-500" />
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
