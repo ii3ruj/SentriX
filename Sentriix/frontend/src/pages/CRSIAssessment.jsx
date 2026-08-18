@@ -92,6 +92,16 @@ export default function CRSIAssessment() {
     };
   };
 
+  /*
+   * هذه الصفحة يومية: الدرجة والتفصيل يخصان اليوم المختار وحده،
+   * والباك إند يرسل breakdown مع كل يوم. التقييم التراكمي للمؤسسة
+   * معروض في صفحة CRSI Recommendations.
+   */
+  const dayBreakdown =
+    Array.isArray(selectedDay?.breakdown) && selectedDay.breakdown.length > 0
+      ? selectedDay.breakdown
+      : breakdown;
+
   const scoreStatus = getScoreStatus(selectedDay.score);
   const previousDay = dailyScores[1] || dailyScores[0];
   const scoreDifference = selectedDay.score - previousDay.score;
@@ -178,10 +188,11 @@ export default function CRSIAssessment() {
 
               <div className="text-center">
                 <p className={`text-xl font-semibold ${scoreStatus.className}`}>
-                  {maturityLevel || scoreStatus.label}
+                  {selectedDay.maturity_level || maturityLevel || scoreStatus.label}
                 </p>
                 <p className="text-xs text-gray-500 mt-2">
-                  Current security resilience level
+                  Resilience level for {selectedDay.date} ·{" "}
+                  {selectedDay.incident_count ?? 0} incident(s) that day
                 </p>
               </div>
 
@@ -209,12 +220,12 @@ export default function CRSIAssessment() {
               <div className="mb-8">
                 <h2 className="text-xl font-semibold">Score Breakdown</h2>
                 <p className="text-xs text-gray-500 mt-1">
-                  Security score by control area & NCA alignment
+                  Control-area breakdown for {selectedDay.date} · NCA / ISO / NIST alignment
                 </p>
               </div>
 
               <div className="space-y-6">
-                {breakdown.map((item) => (
+                {dayBreakdown.map((item) => (
                   <div key={item.name}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-300">{item.name}</span>
@@ -314,7 +325,8 @@ export default function CRSIAssessment() {
           {/* ================= GENERATED FOOTER ================= */}
           <div className="flex items-center gap-2 mt-6 text-xs text-gray-500">
             <CalendarDays size={15} />
-            CRSI posture baseline evaluated for {selectedDay.date}
+            Daily CRSI evaluated for {selectedDay.date} — the organization-wide
+            cumulative score is shown on the CRSI Recommendations page
           </div>
         </div>
       </main>
