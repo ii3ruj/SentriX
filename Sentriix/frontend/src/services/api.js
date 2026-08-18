@@ -24,17 +24,27 @@ async function request(endpoint, options = {}) {
 
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
-    
+
     // 🔒 [نقطة التفتيش المركزية - Server-Side Auth Check]
-    if (res.status === 401) {
-      console.warn("Session expired or unauthorized. Redirecting to login...");
-      localStorage.removeItem("token"); // تدمير الجلسة محلياً
-      window.location.href = "/login";  // الطرد الفوري لصفحة الدخول
-      return; 
+    // مسارات المصادقة نفسها مستثناة: إعادة التوجيه عليها كانت تعيد تحميل
+    // صفحة الدخول قبل ظهور رسالة الخطأ، فيبدو الموقع وكأنه معلّق.
+    if (res.status === 401 && !endpoint.startsWith("/api/auth/")) {
+      localStorage.removeItem("token");
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+      throw new Error("Unauthorized");
     }
 
     if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
+      let detail = "";
+      try {
+        const body = await res.json();
+        detail = body?.detail || "";
+      } catch (e) {
+        detail = "";
+      }
+      throw new Error(detail || `HTTP error! status: ${res.status}`);
     }
     return await res.json();
   } catch (error) {
@@ -82,10 +92,11 @@ export const apiService = {
 
     // 🔒 [نقطة التفتيش لرفع الملفات]
     if (res.status === 401) {
-      console.warn("Session expired or unauthorized. Redirecting to login...");
       localStorage.removeItem("token");
-      window.location.href = "/login";
-      return;
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+      throw new Error("Unauthorized");
     }
 
     if (!res.ok) throw new Error("Failed to upload and analyze PDF");
