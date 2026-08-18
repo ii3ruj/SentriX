@@ -322,7 +322,7 @@ export default function AIAnalysis() {
                 Please upload or create a new incident report to view its AI analysis.
               </p>
               <Link
-                to="/incidents/new"
+                to="/new-incident"
                 className="inline-block bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold px-6 py-2.5 rounded-lg hover:opacity-90 transition text-sm"
               >
                 + New Incident
