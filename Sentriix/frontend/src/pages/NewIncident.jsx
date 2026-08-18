@@ -8,6 +8,8 @@ import {
   ShieldCheck,
   Loader2,
   AlertTriangle,
+  Download,
+  CalendarClock,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
@@ -66,7 +68,20 @@ async function validateIncidentPDFContent(file) {
     );
 
     const matchesCount = groupMatches.filter(Boolean).length;
-    return matchesCount >= 2; // على الأقل مجموعتين من المعايير الأمنية موجودة
+    if (matchesCount >= 2) return true;
+
+    /*
+     * أغلب ملفات الـPDF تُخزَّن مضغوطة (FlateDecode)، فلا يظهر نصها في
+     * البايتات الخام — ومنها قالب SentriX نفسه. الرفض هنا كان يمنع الملف
+     * من الوصول إلى الباك إند أصلاً، فلا يعمل التحليل إطلاقاً.
+     * لذلك يُمرَّر الملف للباك إند الذي يستخرج النص فعلياً ويقرر.
+     */
+    const looksCompressed =
+      rawText.includes("flatedecode") ||
+      rawText.includes("/filter") ||
+      (rawText.match(/[a-z]{4,}/g) || []).length < 40;
+
+    return looksCompressed;
   } catch (err) {
     return true; // في حال تعذر القراءة الخام، يمرر للباك إند للتحقق النهائي
   }
@@ -250,10 +265,43 @@ export default function NewIncident() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* ================= REPORT TEMPLATE ================= */}
+                <div className="bg-[#070b16] border border-emerald-500/20 rounded-2xl p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <FileText size={21} className="text-emerald-400" />
+                    </div>
+
+                    <div className="flex-1">
+                      <h2 className="text-sm font-semibold text-gray-200">
+                        Step 1 — Download the SentriX report template
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                        The template contains the 37 network flow features the AI model
+                        needs. Fill in the values captured for your incident, keep the
+                        field names exactly as they are, then upload the completed file
+                        below. If any value is missing, the incident is scored from
+                        organizational context only and the model is not used.
+                      </p>
+
+                      <a
+                        href={apiService.incidentTemplateUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/20 transition"
+                      >
+                        <Download size={16} />
+                        Download PDF Template
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
                 {/* UPLOAD SECTION */}
                 <div>
                   <label className="text-sm font-semibold text-gray-300 mb-3 block">
-                    Incident Report <span className="text-red-400 ml-1">*</span>
+                    Step 2 — Upload the completed report
+                    <span className="text-red-400 ml-1">*</span>
                   </label>
 
                   {!uploadedFile ? (
@@ -345,15 +393,18 @@ export default function NewIncident() {
                   <label className="text-sm font-semibold text-gray-300 mb-2 block">
                     Actual Incident Time <span className="text-red-400 ml-1">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={incidentTime}
-                    onChange={(e) => setIncidentTime(e.target.value)}
-                    placeholder="e.g. 05/26/2026 10:30 AM"
-                    className="w-full bg-[#070b16] border border-white/10 rounded-lg px-4 py-3 text-sm text-gray-200 outline-none focus:border-emerald-400/60 transition placeholder:text-gray-600"
-                  />
+                  <div className="flex items-center bg-[#070b16] border border-white/10 rounded-lg px-3 focus-within:border-emerald-400/60 transition">
+                    <CalendarClock size={16} className="text-gray-500 shrink-0" />
+                    <input
+                      type="datetime-local"
+                      value={incidentTime}
+                      max={new Date().toISOString().slice(0, 16)}
+                      onChange={(e) => setIncidentTime(e.target.value)}
+                      className="w-full bg-transparent outline-none px-2 py-3 text-sm text-gray-200 [color-scheme:dark]"
+                    />
+                  </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    Enter when the incident actually occurred, not when the report was uploaded.
+                    Select when the incident actually occurred, not when the report was uploaded.
                   </p>
                 </div>
 
