@@ -128,11 +128,17 @@ getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
       body: "{}",
     }),
 
-  // قالب تقرير الحادثة الجاهز للتعبئة (يحمل التوكن مثل بقية روابط التنزيل)
+  // قوالب تقرير الحادثة الفارغة (تحمل التوكن مثل بقية روابط التنزيل)
   incidentTemplateUrl: () => {
     const token = localStorage.getItem("token");
     const query = token ? `?token=${encodeURIComponent(token)}` : "";
     return `${BASE_URL}/api/incidents/template/download${query}`;
+  },
+
+  incidentTemplateDocxUrl: () => {
+    const token = localStorage.getItem("token");
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    return `${BASE_URL}/api/incidents/template/docx/download${query}`;
   },
 
   // رابط الـ PDF الرسمي المولّد والمؤرشف (يُفتح مباشرة في تبويب جديد).
