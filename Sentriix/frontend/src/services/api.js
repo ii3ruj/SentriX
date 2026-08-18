@@ -104,7 +104,7 @@ export const apiService = {
   },
 
   // 3. AI Analysis & Recommendations
-  getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
+getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
   getRecommendations: (incidentId) =>
     request(
       incidentId
