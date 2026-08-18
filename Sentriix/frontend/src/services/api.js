@@ -117,6 +117,10 @@ export const apiService = {
   // 4. Archiving (P1 - P4 Verification & Retrieval)
   getArchivedIncidents: () => request("/api/archive"),
 
+  // أرشفة تقرير الـCRSI فعلياً في الباك إند
+  archiveCRSIReport: () =>
+    request("/api/crsi-assessment/archive", { method: "POST", body: "{}" }),
+
   // P1 Integrity — يعيد الباك إند حساب البصمة ويقارنها بالمخزّنة
   verifyArchiveHash: (incidentId) =>
     request(`/api/archive/verify/${incidentId}`, {
