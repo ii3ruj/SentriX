@@ -17,7 +17,6 @@ import { apiService } from "../services/api";
 
 const STARTING_NUMBER = 11;
 
-// قائمة الكلمات المفتاحية الإلزامية للتحقق من هيكل التقرير الأمني
 const REQUIRED_KEYWORDS = [
   ["incident", "threat", "alert", "security report", "sentrix"],
   ["ip", "asset", "host", "source", "destination", "server"],
@@ -55,14 +54,12 @@ async function calculateFileSHA256(file) {
   }
 }
 
-// دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
 async function validateIncidentPDFContent(file) {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const textDecoder = new TextDecoder("utf-8", { fatal: false });
     const rawText = textDecoder.decode(arrayBuffer.slice(0, 100000)).toLowerCase();
 
-    // التحقق من وجود مؤشرات أمنية مطابقة
     const groupMatches = REQUIRED_KEYWORDS.map(group => 
       group.some(kw => rawText.includes(kw))
     );
@@ -95,6 +92,42 @@ export default function NewIncident() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
+  // دالة تحميل القالب مباشرة كملف نصي/بي دي إف محلياً لتفادي أي أخطاء سيرفر
+  const handleDownloadTemplate = () => {
+    const templateContent = `SentriX — Incident Report Template
+Fill in the values below and upload this file on the New Incident page. Keep the field names exactly as they appear.
+
+1. Incident Information
+Incident Type: malware | ransomware | ddos | phishing | brute_force
+Source: EDR / SIEM
+Description: 
+
+2. Network Information
+Protocol: TCP
+Source IP: 
+Destination IP: 
+
+3. Asset Information
+Asset Type: Server | Workstation | Database
+Asset Criticality: low | medium | high | critical
+Exposure: internal | dmz | internet_facing
+Vulnerability: low | medium | high | critical
+Business Impact: low | medium | high | critical
+
+4. AI Network Features (37 required features)
+Protocol, Flow Duration, Total Fwd Packets, Total Backward Packets, Fwd Packets Length Total, Bwd Packets Length Total, Fwd Packet Length Max, Fwd Packet Length Min, Fwd Packet Length Mean, Bwd Packet Length Max, Bwd Packet Length Min, Bwd Packet Length Mean, Flow Bytes/s, Flow Packets/s, Flow IAT Mean, Flow IAT Std, Fwd IAT Total, Bwd IAT Total, Fwd Header Length, Bwd Header Length, Fwd Packets/s, Bwd Packets/s, Packet Length Min, Packet Length Max, Packet Length Mean, Packet Length Std, Packet Length Variance, FIN Flag Count, SYN Flag Count, RST Flag Count, PSH Flag Count, ACK Flag Count, URG Flag Count, ECE Flag Count, Down/Up Ratio, Avg Packet Size, Fwd Seg Size Min`;
+
+    const blob = new Blob([templateContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "SentriX_Incident_Report_Template.txt";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -110,7 +143,6 @@ export default function NewIncident() {
     setIsValidating(true);
     setNotification(null);
 
-    // 1. التحقق من صيغة وهيكل التقرير الأمني
     const isStructureValid = await validateIncidentPDFContent(file);
     if (!isStructureValid) {
       setUploadedFile(null);
@@ -118,13 +150,12 @@ export default function NewIncident() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       setNotification({
         type: "error",
-        message: "Invalid Incident Report format. The uploaded PDF does not contain required SentriX security metadata (Asset, Threat, IP, or Severity metrics).",
+        message: "Invalid Incident Report format. The uploaded PDF does not contain required SentriX security metadata.",
       });
       setIsValidating(false);
       return;
     }
 
-    // 2. حساب بصمة SHA-256 للملف
     const hash = await calculateFileSHA256(file);
     setUploadedFile(file);
     setFileHash(hash);
@@ -163,7 +194,6 @@ export default function NewIncident() {
     const generatedId = generateNextId();
     const now = new Date();
 
-    // اكتشاف مستوى الخطورة ديناميكياً من اسم الملف أو محتواه لتفادي تثبيتها على Critical دائماً
     const fileNameLower = uploadedFile.name.toLowerCase();
     let detectedSeverity = "Medium";
     if (fileNameLower.includes("critical") || fileNameLower.includes("crit")) {
@@ -237,7 +267,6 @@ export default function NewIncident() {
       <div className="flex-1 min-w-0">
         <main className="min-h-screen px-8 py-8">
           <div className="max-w-3xl mx-auto">
-            {/* BACK */}
             <Link
               to="/incidents"
               className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-emerald-400 transition mb-6"
@@ -246,7 +275,6 @@ export default function NewIncident() {
               Back to Incidents
             </Link>
 
-            {/* MAIN CARD */}
             <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 shadow-2xl">
               <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2">Incident Intake Form</h1>
@@ -272,7 +300,6 @@ export default function NewIncident() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* ================= REPORT TEMPLATE ================= */}
                 <div className="bg-[#070b16] border border-emerald-500/20 rounded-2xl p-5">
                   <div className="flex items-start gap-4">
                     <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
@@ -286,26 +313,21 @@ export default function NewIncident() {
                       <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
                         The template contains the 37 network flow features the AI model
                         needs. Fill in the values captured for your incident, keep the
-                        field names exactly as they are, then upload the completed file
-                        below. If any value is missing, the incident is scored from
-                        organizational context only and the model is not used.
+                        field names exactly as they are, then upload the completed file below.
                       </p>
 
-                      <a
-                        href="/SentriX_Incident_Report_Template.pdf"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download="SentriX_Incident_Report_Template.pdf"
-                        className="inline-flex items-center gap-2 mt-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/20 transition"
+                      <button
+                        type="button"
+                        onClick={handleDownloadTemplate}
+                        className="inline-flex items-center gap-2 mt-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/20 transition cursor-pointer"
                       >
                         <Download size={16} />
-                        Download PDF Template
-                      </a>
+                        Download Template File
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* UPLOAD SECTION */}
                 <div>
                   <label className="text-sm font-semibold text-gray-300 mb-3 block">
                     Step 2 — Upload the completed report
@@ -396,7 +418,6 @@ export default function NewIncident() {
                   />
                 </div>
 
-                {/* ACTUAL INCIDENT TIME */}
                 <div>
                   <label className="text-sm font-semibold text-gray-300 mb-2 block">
                     Actual Incident Time <span className="text-red-400 ml-1">*</span>
@@ -416,7 +437,6 @@ export default function NewIncident() {
                   </p>
                 </div>
 
-                {/* BUTTONS */}
                 <div className="flex gap-3 pt-3">
                   <Link
                     to="/incidents"
