@@ -78,7 +78,7 @@ export default function Recommendations() {
   const { id } = useParams();
 
   const [incident, setIncident] = useState({
-    id: id || "INC-0001",
+    id: id || "",
     title: "Ransomware detected on Server-01",
     severity: "Critical",
     riskScore: 87,
@@ -90,10 +90,18 @@ export default function Recommendations() {
 
   useEffect(() => {
     let isMounted = true;
-    const targetId = id || "INC-0001";
 
     const fetchIncidentAIRecommendations = async () => {
       try {
+        // بلا معرّف في الرابط كانت الصفحة تفترض INC-0001 وهو قد لا يكون
+        // موجوداً، فيرجع الأرشيف "Not found". الآن نأخذ أحدث حادثة فعلية.
+        let targetId = id;
+        if (!targetId) {
+          const latest = await apiService.getRecommendations();
+          targetId = latest?.incident_id;
+          if (!targetId) return;
+        }
+
         const incidentData = await apiService.getIncidentById(targetId);
         if (isMounted && incidentData) {
           setIncident({
@@ -150,6 +158,11 @@ export default function Recommendations() {
   };
 
   const handleGenerateReport = async () => {
+    if (!incident.id) {
+      window.alert("No incident is loaded yet. Please wait for the analysis to load.");
+      return;
+    }
+
     const confirmed = window.confirm(
       `Generate and archive the report for ${incident.id}?\n\n` +
       `The report will be stored as an immutable snapshot with a SHA-256 ` +
