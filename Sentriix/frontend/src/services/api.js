@@ -70,7 +70,7 @@ export const apiService = {
   getDashboardStats: () => request("/api/dashboard/stats"),
 
   // 2. Incidents (Intake & List)
-  getIncidents: () => request("/api/incidents"),
+  getIncidents: () => request("/api/incidents?limit=100000"),
   getIncidentById: (id) => request(`/api/incidents/${id}`),
   createIncident: (incidentData) =>
     request("/api/incidents", {
@@ -104,7 +104,7 @@ export const apiService = {
   },
 
   // 3. AI Analysis & Recommendations
-getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
+  getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
   getRecommendations: (incidentId) =>
     request(
       incidentId
@@ -115,7 +115,7 @@ getAIAnalysis: (incidentId) => request(`/api/ai-analysis/${incidentId}`),
   getCRSIPosture: () => request("/api/crsi-assessment"),
 
   // 4. Archiving (P1 - P4 Verification & Retrieval)
-  getArchivedIncidents: () => request("/api/archive"),
+  getArchivedIncidents: () => request("/api/archive?limit=100000"),
 
   // أرشفة تقرير الـCRSI فعلياً في الباك إند
   archiveCRSIReport: () =>
