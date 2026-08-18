@@ -166,9 +166,10 @@ export default function AIAnalysis() {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [liveIncident, setLiveIncident] = useState(null);
+  const [serverAIAnalysis, setServerAIAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // جلب تفاصيل الحادثة والتحليل من السيرفر
+  // جلب تفاصيل الحادثة وتحليل الـ AI الحقيقي مباشرة من السيرفر لمنع أي اختلاف
   useEffect(() => {
     let isMounted = true;
 
@@ -179,9 +180,14 @@ export default function AIAnalysis() {
       }
 
       try {
-        const data = await apiService.getIncidentById(id).catch(() => null);
-        if (isMounted && data) {
-          setLiveIncident(data);
+        const [incidentData, aiData] = await Promise.all([
+          apiService.getIncidentById(id).catch(() => null),
+          apiService.getAIAnalysis(id).catch(() => null),
+        ]);
+
+        if (isMounted) {
+          if (incidentData) setLiveIncident(incidentData);
+          if (aiData) setServerAIAnalysis(aiData);
         }
       } catch (err) {
         console.warn("Using local incident fallback for AI Analysis:", err);
@@ -215,17 +221,22 @@ export default function AIAnalysis() {
   let analysis = null;
 
   if (incident) {
-    const riskScore =
+    // الدمج الفوري مع تحليل السيرفر الحقيقي (Server AI Analysis) لتوحيد النتائج تماماً مع الـ PDF
+    const activeRiskScore =
+      serverAIAnalysis?.risk_score ??
       incident.risk_score ??
       (incident.severity === "Critical" ? 87 : incident.severity === "High" ? 74 : 52);
+
     const riskDetected =
-      incident.flow ? incident.flow === "full_path" : riskScore > 30;
-    const severity = incident.severity || incident.asset_criticality || "Medium";
-    const threatType = incident.incident_type || incident.threat_type || incident.title || "Unknown";
+      serverAIAnalysis?.risk_detected ??
+      (incident.flow ? incident.flow === "full_path" : activeRiskScore > 30);
+
+    const severity = serverAIAnalysis?.severity || incident.severity || incident.asset_criticality || "Medium";
+    const threatType = serverAIAnalysis?.threat_type || incident.incident_type || incident.threat_type || incident.title || "Unknown";
 
     analysis = {
       incident_id: incident.id,
-      incident_title: incident.title || "Incident Analysis",
+      incident_title: serverAIAnalysis?.incident_title || incident.title || "Incident Analysis",
       severity,
       time: incident.time || incident.actual_incident_time || incident.created_at || "Just now",
       source: incident.source || "Ingestion Pipeline",
@@ -233,12 +244,12 @@ export default function AIAnalysis() {
         incident.asset_criticality ? ` (${incident.asset_criticality} criticality)` : ""
       }`,
       threat_type: threatType,
-      threat_category: THREAT_CATEGORY[threatType] || "Automated Threat",
+      threat_category: THREAT_CATEGORY[threatType] || serverAIAnalysis?.threat_category || "Automated Threat",
       risk_detected: riskDetected,
-      risk_score: riskDetected ? riskScore : null,
+      risk_score: riskDetected ? activeRiskScore : null,
       analysis_id: `AI-ANL-${String(incident.id).replace("INC-", "")}`,
       model_used:
-        incident.model_used || "SentriX Threat Intelligence Model v2.1",
+        serverAIAnalysis?.model_used || incident.model_used || "SentriX Threat Intelligence Model v2.1",
       analysis_time: incident.created_at
         ? new Date(incident.created_at).toLocaleString("en-US", {
             dateStyle: "medium",
@@ -249,12 +260,13 @@ export default function AIAnalysis() {
             timeStyle: "short",
           }),
       data_sources: `${incident.source || "PDF/Telemetry"}, Threat Intel, Behavioral Logs`,
-      mitre_tactics: incident.mitre_tactics || "Impact, Execution, Defense Evasion",
-      attack_technique: incident.attack_technique || "T1486, T1070, T1059",
+      mitre_tactics: serverAIAnalysis?.mitre_tactics || incident.mitre_tactics || "Impact, Execution, Defense Evasion",
+      attack_technique: serverAIAnalysis?.attack_technique || incident.attack_technique || "T1486, T1070, T1059",
       key_findings:
-        incident.key_findings && Array.isArray(incident.key_findings)
+        serverAIAnalysis?.key_findings ||
+        (incident.key_findings && Array.isArray(incident.key_findings)
           ? incident.key_findings
-          : generateFindings(incident),
+          : generateFindings(incident)),
     };
   }
 
