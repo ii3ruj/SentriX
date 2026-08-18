@@ -55,7 +55,7 @@ export default function CRSIAssessment() {
         if (isMounted && data) {
           if (data.dailyScores && Array.isArray(data.dailyScores) && data.dailyScores.length > 0) {
             setDailyScores(data.dailyScores);
-            setSelectedDay(data.dailyScores[0]);
+            // تم تثبيت اختيارك وعدم تغليبه بالباك إند لكي لا يختفي تاريخ اليوم
           }
           if (data.breakdown && Array.isArray(data.breakdown) && data.breakdown.length > 0) {
             setBreakdown(data.breakdown);
@@ -101,11 +101,6 @@ export default function CRSIAssessment() {
     };
   };
 
-  /*
-   * هذه الصفحة يومية: الدرجة والتفصيل يخصان اليوم المختار وحده،
-   * والباك إند يرسل breakdown مع كل يوم. التقييم التراكمي للمؤسسة
-   * معروض في صفحة CRSI Recommendations.
-   */
   const dayBreakdown =
     Array.isArray(selectedDay?.breakdown) && selectedDay.breakdown.length > 0
       ? selectedDay.breakdown
@@ -117,12 +112,9 @@ export default function CRSIAssessment() {
 
   return (
     <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
-      {/* ================= UNIFIED SIDEBAR ================= */}
       <Sidebar />
 
-      {/* ================= MAIN ================= */}
       <main className="flex-1 min-w-0">
-        {/* ================= HEADER ================= */}
         <header className="px-8 py-7 border-b border-white/10">
           <div className="flex items-center gap-2 mb-2">
             <Gauge size={20} className="text-emerald-400" />
@@ -137,9 +129,7 @@ export default function CRSIAssessment() {
           </p>
         </header>
 
-        {/* ================= CONTENT ================= */}
         <div className="p-8 max-w-[1250px] mx-auto">
-          {/* ================= DATE SELECTOR ================= */}
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-xs text-gray-500 mb-1">Security score for</p>
@@ -173,9 +163,7 @@ export default function CRSIAssessment() {
             </select>
           </div>
 
-          {/* ================= TOP CARDS ================= */}
           <div className="grid lg:grid-cols-2 gap-5 mb-6">
-            {/* OVERALL SCORE */}
             <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-7">
               <div className="flex items-center justify-between mb-7">
                 <div>
@@ -190,7 +178,6 @@ export default function CRSIAssessment() {
                 </div>
               </div>
 
-              {/* SCORE CIRCLE */}
               <div className="flex justify-center py-5">
                 <ScoreCircle score={selectedDay.score} />
               </div>
@@ -205,7 +192,6 @@ export default function CRSIAssessment() {
                 </p>
               </div>
 
-              {/* Difference */}
               <div className="flex justify-center mt-6">
                 <div
                   className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
@@ -224,7 +210,6 @@ export default function CRSIAssessment() {
               </div>
             </section>
 
-            {/* BREAKDOWN */}
             <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-7">
               <div className="mb-8">
                 <h2 className="text-xl font-semibold">Score Breakdown</h2>
@@ -261,7 +246,6 @@ export default function CRSIAssessment() {
             </section>
           </div>
 
-          {/* ================= DAILY SCORES ================= */}
           <section className="bg-[#0c1220] border border-white/10 rounded-2xl p-6 mb-6">
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -305,7 +289,6 @@ export default function CRSIAssessment() {
             </div>
           </section>
 
-          {/* ================= RECOMMENDATIONS BANNER ================= */}
           <section className="bg-gradient-to-r from-emerald-500/10 to-green-500/5 border border-emerald-500/20 rounded-2xl p-6">
             <div className="flex items-center justify-between gap-6">
               <div className="flex items-start gap-4">
@@ -331,7 +314,6 @@ export default function CRSIAssessment() {
             </div>
           </section>
 
-          {/* ================= GENERATED FOOTER ================= */}
           <div className="flex items-center gap-2 mt-6 text-xs text-gray-500">
             <CalendarDays size={15} />
             Daily CRSI evaluated for {selectedDay.date} — the organization-wide
