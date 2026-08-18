@@ -30,6 +30,7 @@ export default function Login() {
       }
 
       localStorage.setItem("token", token || "sentrix_active_session_token");
+      localStorage.setItem("sentrix_user", trimmedEmail);
 
       setNotification({ type: "success", message: "Login successful. Redirecting..." });
       setTimeout(() => navigate("/dashboard"), 1000);
