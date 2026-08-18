@@ -133,13 +133,12 @@ export default function Dashboard() {
   const [attackTypes, setAttackTypes] = useState(defaultAttackTypes);
   const [trends, setTrends] = useState(null);
 
-  // جلب البيانات من الـ API وتحديثها تلقائياً
+  // جلب البيانات من الـ API وتحديثها تلقائياً بدون أي قيود أو حدود
   useEffect(() => {
     let isMounted = true;
 
     const fetchLiveDashboard = async () => {
       try {
-        // جلب قائمة الحوادث الحقيقية
         const liveIncidents = await apiService.getIncidents();
         if (isMounted && Array.isArray(liveIncidents) && liveIncidents.length > 0) {
           const formatted = liveIncidents.map((item, idx) => ({
@@ -154,7 +153,6 @@ export default function Dashboard() {
           setIncidentsList(formatted);
         }
 
-        // جلب توزيع أنواع الهجمات ونسب التغيّر من مسار الإحصائيات
         const statsData = await apiService.getDashboardStats().catch(() => null);
         if (isMounted && statsData) {
           if (Array.isArray(statsData.attackTypes) && statsData.attackTypes.length > 0) {
@@ -170,7 +168,7 @@ export default function Dashboard() {
     };
 
     fetchLiveDashboard();
-    const interval = setInterval(fetchLiveDashboard, 5000); // تحديث فوري كل 5 ثوانٍ
+    const interval = setInterval(fetchLiveDashboard, 5000);
 
     return () => {
       isMounted = false;
@@ -178,13 +176,11 @@ export default function Dashboard() {
     };
   }, []);
 
-  // ترتيب الحوادث حسب الأهمية
   const sortedIncidents = [...incidentsList].sort(
     (a, b) =>
       (SEVERITY_PRIORITY[b.severity] || 0) - (SEVERITY_PRIORITY[a.severity] || 0)
   );
 
-  // حساب الإحصائيات
   const analyzedCount = sortedIncidents.filter((i) => i.hasAiResult).length;
   const pendingCount = sortedIncidents.filter((i) => !i.hasAiResult).length;
   const criticalCount = sortedIncidents.filter((i) => i.severity === "Critical").length;
@@ -233,13 +229,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
-      {/* ================= UNIFIED SIDEBAR ================= */}
       <Sidebar />
 
-      {/* ================= MAIN CONTENT ================= */}
       <div className="flex-1 flex flex-col">
         <main className="flex-1 overflow-y-auto p-8 space-y-6">
-          {/* ================= TITLE ================= */}
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-gray-400 text-sm">
@@ -247,7 +240,6 @@ export default function Dashboard() {
             </p>
           </div>
 
-          {/* ================= STAT CARDS ================= */}
           <div className="grid grid-cols-4 gap-4">
             {stats.map(
               ({
@@ -291,9 +283,7 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* ================= CHARTS ================= */}
           <div className="grid grid-cols-3 gap-4">
-            {/* INCIDENTS OVER TIME */}
             <div className="col-span-2 bg-[#0c1220] border border-white/10 rounded-xl p-4">
               <h2 className="font-semibold text-sm mb-2">
                 Incidents Over Time
@@ -333,7 +323,6 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
 
-            {/* TOP ATTACK TYPES */}
             <div className="bg-[#0c1220] border border-white/10 rounded-xl p-4">
               <h2 className="font-semibold text-sm mb-2">
                 Top Attack Types
@@ -384,7 +373,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ================= INCIDENTS TABLE ================= */}
           <div className="bg-[#0c1220] border border-white/10 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-sm">Incidents</h2>
