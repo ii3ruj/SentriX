@@ -121,17 +121,17 @@ export default function CRSIRecommendations() {
     if (!confirmed) return;
 
     try {
-      // الأرشيف مصدره الباك إند، لا localStorage
-      const rows = await apiService.getArchivedIncidents();
-      const crsiRow = (rows || []).find((r) => r.type === "CRSI Report");
+      // يُخزَّن فعلياً في الباك إند (سجل archives + لقطة مجمّدة)
+      const result = await apiService.archiveCRSIReport();
+      const row = result?.archived;
 
       window.alert(
-        crsiRow
+        row
           ? `CRSI report archived.\n\n` +
-            `Report ID: ${crsiRow.report_id}\n` +
-            `SHA-256: ${String(crsiRow.sha256 || "").slice(0, 32)}...\n` +
-            `Archived by: ${crsiRow.archived_by}\n` +
-            `Retention until: ${crsiRow.retention_until}`
+            `Report ID: ${row.report_id}\n` +
+            `SHA-256: ${String(row.sha256 || "").slice(0, 32)}...\n` +
+            `Archived by: ${row.archived_by}\n` +
+            `Retention until: ${row.retention_until}`
           : "CRSI report archived."
       );
 
