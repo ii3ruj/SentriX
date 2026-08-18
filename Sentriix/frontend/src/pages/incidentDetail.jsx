@@ -21,31 +21,56 @@ function InfoRow({ label, value }) {
 export default function IncidentDetail() {
   const { id } = useParams();
   const [liveIncident, setLiveIncident] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
+    let attempts = 0;
 
+    // الصفحة كانت تجلب البيانات مرة واحدة وبلا حالة تحميل، فتعرض
+    // "Incident not found" فوراً قبل وصول الرد — وتبقى عليها لو فشل
+    // الطلب مرة واحدة (بدء بارد من Render مثلاً).
     const fetchDetail = async () => {
-      if (!id) return;
+      if (!id) {
+        setLoading(false);
+        return;
+      }
       try {
-        const data = await apiService.getIncidentById(id).catch(() => null);
-        if (isMounted && data) {
+        const data = await apiService.getIncidentById(id);
+        if (isMounted) {
           setLiveIncident(data);
+          setError(null);
+          setLoading(false);
         }
       } catch (err) {
-        console.warn("Using fallback incident details:", err);
+        attempts += 1;
+        if (isMounted && attempts >= 3) {
+          setError(err.message || "Could not load the incident.");
+          setLoading(false);
+        }
       }
     };
 
+    setLoading(true);
+    setError(null);
+    setLiveIncident(null);
     fetchDetail();
+
+    // إعادة محاولة قصيرة ثم تحديث دوري
+    const interval = setInterval(fetchDetail, 4000);
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, [id]);
 
-  // القيم من الباك إند فقط. الدمج مع البيانات الوهمية كان يعرض تفاصيل
-  // حادثة غير موجودة أصلاً عند تعذّر الاتصال.
-  const incident = liveIncident && liveIncident.id === id ? liveIncident : null;
+  // مقارنة متسامحة: اختلاف حالة الأحرف أو المسافات كان يُسقط النتيجة
+  const sameId = (a, b) =>
+    String(a || "").trim().toUpperCase() === String(b || "").trim().toUpperCase();
+
+  const incident =
+    liveIncident && (sameId(liveIncident.id, id) || !id) ? liveIncident : null;
 
   return (
     <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
@@ -67,9 +92,46 @@ export default function IncidentDetail() {
 
         {/* ================= CONTENT ================= */}
         <main className="flex-1 overflow-y-auto p-8 max-w-3xl space-y-6">
-          {!incident ? (
-            <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 text-center text-gray-400">
-              Incident <span className="text-emerald-400 font-mono">{id}</span> not found.
+          {!id ? (
+            /*
+             * هذا المكوّن هو صفحة تفاصيل حادثة واحدة، ولا يعمل إلا على
+             * مسار يحمل معرّفاً مثل /incidents/INC-0012.
+             * ظهوره على /incidents يعني أن ملف incidents.jsx (صفحة القائمة)
+             * استُبدل بمحتوى هذا الملف.
+             */
+            <div className="bg-[#0c1220] border border-amber-500/20 rounded-2xl p-8 text-center space-y-3">
+              <p className="text-gray-300">No incident selected.</p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+                This is the incident detail view and needs an incident ID in the
+                URL (for example <span className="font-mono text-emerald-400">/incidents/INC-0012</span>).
+                If you reached this from the sidebar, the Incidents list page file
+                may have been overwritten.
+              </p>
+              <Link
+                to="/incidents"
+                className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:underline"
+              >
+                Open the Incidents list
+              </Link>
+            </div>
+          ) : loading ? (
+            <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 flex flex-col items-center gap-3 text-gray-400">
+              <Loader2 size={28} className="animate-spin text-emerald-400" />
+              <span className="text-sm">
+                Loading incident{" "}
+                <span className="text-emerald-400 font-mono">{id}</span>...
+              </span>
+            </div>
+          ) : !incident ? (
+            <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 text-center text-gray-400 space-y-2">
+              <p>
+                Incident <span className="text-emerald-400 font-mono">{id}</span> not found.
+              </p>
+              {error && <p className="text-xs text-red-400">{error}</p>}
+              <p className="text-xs text-gray-600">
+                Older incident IDs are removed once the retention limit is reached.
+                Open the Incidents page to see the current list.
+              </p>
             </div>
           ) : (
             <>
@@ -138,7 +200,7 @@ export default function IncidentDetail() {
 
                 {/* الـ PDF الرسمي المولّد من الباك إند بعد التحليل */}
                 <a
-                  href={`${API_BASE}/api/archive/${incident.id}/download`}
+                  href={apiService.archiveDownloadUrl(incident.id)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 flex items-center justify-center gap-2 border border-emerald-500/30 text-emerald-300 font-semibold py-3 rounded-xl hover:bg-emerald-500/10 transition"
