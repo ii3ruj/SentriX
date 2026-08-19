@@ -41,6 +41,7 @@ const DEFAULT_BREAKDOWN = [
 export default function CRSIAssessment() {
   const navigate = useNavigate();
 
+  // نجعل القيمة الافتراضية دائماً تبدأ بيوم اليوم وتثبت عليه
   const [dailyScores, setDailyScores] = useState(DEFAULT_DAILY_SCORES);
   const [selectedDay, setSelectedDay] = useState(DEFAULT_DAILY_SCORES[0]);
   const [breakdown, setBreakdown] = useState(DEFAULT_BREAKDOWN);
@@ -53,10 +54,6 @@ export default function CRSIAssessment() {
       try {
         const data = await apiService.getCRSIPosture().catch(() => null);
         if (isMounted && data) {
-          if (data.dailyScores && Array.isArray(data.dailyScores) && data.dailyScores.length > 0) {
-            setDailyScores(data.dailyScores);
-            // تم تثبيت اختيارك وعدم تغليبه بالباك إند لكي لا يختفي تاريخ اليوم
-          }
           if (data.breakdown && Array.isArray(data.breakdown) && data.breakdown.length > 0) {
             setBreakdown(data.breakdown);
           }
@@ -68,12 +65,6 @@ export default function CRSIAssessment() {
     };
 
     fetchCRSIPosture();
-    const interval = setInterval(fetchCRSIPosture, 5000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
   }, []);
 
   const getScoreStatus = (score) => {
