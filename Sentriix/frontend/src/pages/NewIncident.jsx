@@ -58,28 +58,31 @@ async function calculateFileSHA256(file) {
 
 // دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
 async function validateIncidentPDFContent(file) {
-  // ملفات Word أرشيف ZIP، فلا يُقرأ نصها الخام هنا — يتولاها الباك إند
   const name = (file.name || "").toLowerCase();
-  if (name.endsWith(".docx") || name.endsWith(".docm")) return true;
+  if (!name.endsWith(".pdf") && !name.endsWith(".docx")) return false;
 
   try {
     const arrayBuffer = await file.arrayBuffer();
+    // قراءة جزء أكبر قليلاً لضمان التقاط العناوين
     const textDecoder = new TextDecoder("utf-8", { fatal: false });
-    const rawText = textDecoder.decode(arrayBuffer.slice(0, 100000)).toLowerCase();
+    const rawText = textDecoder.decode(arrayBuffer.slice(0, 50000)).toLowerCase();
 
-    // التحقق من وجود مؤشرات أمنية مطابقة
-    const groupMatches = REQUIRED_KEYWORDS.map(group => 
-      group.some(kw => rawText.includes(kw))
-    );
+    // 1. بصمة الهوية الأساسية
+    const isSentriX = rawText.includes("sentrix");
+    
+    // 2. التحقق من وجود مفاتيح البيانات (حتى لو لم تكن كاملة، المهم أنها موجودة)
+    // نبحث عن 3 على الأقل من العناوين التي يستخرجها الباك إند
+    const featureKeywords = ["protocol", "flow duration", "packet", "source", "destination", "flag count"];
+    const foundFeatures = featureKeywords.filter(kw => rawText.includes(kw));
 
-    const matchesCount = groupMatches.filter(Boolean).length;
-    if (matchesCount >= 2) return true;
-
-    /*
-     * أغلب ملفات الـPDF تُخزَّن مضغوطة (FlateDecode) فلا يظهر نصها في
-     * البايتات الخام — ومنها قالب SentriX نفسه. الرفض هنا كان يمنع الملف
-     * من الوصول إلى الباك إند أصلاً فلا يعمل التحليل إطلاقاً.
-     */
+    // القرار: يجب أن يكون الملف تابعاً لـ SentriX ويحتوي على الأقل 3 مؤشرات بيانات
+    return isSentriX && foundFeatures.length >= 3;
+    
+  } catch (err) {
+    // إذا حدث خطأ، نرفض الملف لضمان عدم إدخال بيانات تالفة للـ AI
+    return false;
+  }
+}
     const looksCompressed =
       rawText.includes("flatedecode") ||
       rawText.includes("/filter") ||
