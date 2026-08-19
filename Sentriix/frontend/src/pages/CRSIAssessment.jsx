@@ -91,11 +91,11 @@ export default function CRSIAssessment() {
       className: "text-red-400",
     };
   };
-// اعتماد الـ breakdown الوارد من السيرفر حصرياً لكل يوم مختار
-  const dayBreakdown =
-    (selectedDay?.breakdown && selectedDay.breakdown.length > 0)
-      ? selectedDay.breakdown
-      : (selectedDay?.breakdown || []);
+ // هذا التعديل يضمن أن الـ Breakdown يتغير فور اختيار أي يوم من القائمة
+  const dayBreakdown = 
+    selectedDay?.breakdown && selectedDay.breakdown.length > 0 
+      ? selectedDay.breakdown 
+      : DEFAULT_BREAKDOWN;
 
   const scoreStatus = getScoreStatus(selectedDay.score);
   const previousDay = dailyScores[1] || dailyScores[0];
