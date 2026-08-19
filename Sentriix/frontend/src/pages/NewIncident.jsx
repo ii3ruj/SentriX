@@ -56,32 +56,29 @@ async function calculateFileSHA256(file) {
   }
 }
 
-// دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
 async function validateIncidentPDFContent(file) {
   const name = (file.name || "").toLowerCase();
   if (!name.endsWith(".pdf") && !name.endsWith(".docx")) return false;
 
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    // قراءة جزء أكبر قليلاً لضمان التقاط العناوين
-    const textDecoder = new TextDecoder("utf-8", { fatal: false });
-    const rawText = textDecoder.decode(arrayBuffer.slice(0, 50000)).toLowerCase();
-
-    // 1. بصمة الهوية الأساسية
-    const isSentriX = rawText.includes("sentrix");
-    
-    // 2. التحقق من وجود مفاتيح البيانات (حتى لو لم تكن كاملة، المهم أنها موجودة)
-    // نبحث عن 3 على الأقل من العناوين التي يستخرجها الباك إند
-    const featureKeywords = ["protocol", "flow duration", "packet", "source", "destination", "flag count"];
-    const foundFeatures = featureKeywords.filter(kw => rawText.includes(kw));
-
-    // القرار: يجب أن يكون الملف تابعاً لـ SentriX ويحتوي على الأقل 3 مؤشرات بيانات
-    return isSentriX && foundFeatures.length >= 3;
-    
-  } catch (err) {
-    // إذا حدث خطأ، نرفض الملف لضمان عدم إدخال بيانات تالفة للـ AI
-    return false;
+  // إذا كان ملف Word، فحص النصوص يعمل بشكل ممتاز (بصيغة XML)
+  if (name.endsWith(".docx")) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const textDecoder = new TextDecoder("utf-8", { fatal: false });
+        const rawText = textDecoder.decode(arrayBuffer.slice(0, 50000)).toLowerCase();
+        
+        const isSentriX = rawText.includes("sentrix");
+        const featureKeywords = ["protocol", "flow duration", "packet", "source", "destination"];
+        const foundFeatures = featureKeywords.filter(kw => rawText.includes(kw));
+        
+        return isSentriX && foundFeatures.length >= 2;
+      } catch (err) { return false; }
   }
+
+  // إذا كان PDF، نمرره للباك إند (لأن الـ PDF مضغوط ولا يُقرأ خاماً)
+  // لكننا نضع "شرط سلامة" بسيط: حجم الملف يجب أن يكون معقولاً
+  return file.size > 1000 && file.size < 5 * 1024 * 1024; 
+}
 }
     const looksCompressed =
       rawText.includes("flatedecode") ||
