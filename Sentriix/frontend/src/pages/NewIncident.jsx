@@ -9,12 +9,23 @@ import {
   Loader2,
   AlertTriangle,
   Download,
-  CalendarClock,
-  FileType2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
+
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://sentrix-backend-qsnu.onrender.com";
+
+/*
+ * رابط قالب Word يُبنى هنا مباشرة بدل الاعتماد على دالة في api.js،
+ * حتى تعمل الصفحة سواء حُدِّث ملف الخدمات أم لا.
+ */
+function wordTemplateUrl() {
+  const token = localStorage.getItem("token");
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${API_BASE}/api/incidents/template/docx/download${query}`;
+}
 
 const STARTING_NUMBER = 11;
 
@@ -56,30 +67,30 @@ async function calculateFileSHA256(file) {
   }
 }
 
+// دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
 async function validateIncidentPDFContent(file) {
+  // ملفات Word أرشيف ZIP، فلا يُقرأ نصها الخام هنا — يتولاها الباك إند
   const name = (file.name || "").toLowerCase();
-  if (!name.endsWith(".pdf") && !name.endsWith(".docx")) return false;
+  if (name.endsWith(".docx") || name.endsWith(".docm")) return true;
 
-  // إذا كان ملف Word، فحص النصوص يعمل بشكل ممتاز (بصيغة XML)
-  if (name.endsWith(".docx")) {
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const textDecoder = new TextDecoder("utf-8", { fatal: false });
-        const rawText = textDecoder.decode(arrayBuffer.slice(0, 50000)).toLowerCase();
-        
-        const isSentriX = rawText.includes("sentrix");
-        const featureKeywords = ["protocol", "flow duration", "packet", "source", "destination"];
-        const foundFeatures = featureKeywords.filter(kw => rawText.includes(kw));
-        
-        return isSentriX && foundFeatures.length >= 2;
-      } catch (err) { return false; }
-  }
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const textDecoder = new TextDecoder("utf-8", { fatal: false });
+    const rawText = textDecoder.decode(arrayBuffer.slice(0, 100000)).toLowerCase();
 
-  // إذا كان PDF، نمرره للباك إند (لأن الـ PDF مضغوط ولا يُقرأ خاماً)
-  // لكننا نضع "شرط سلامة" بسيط: حجم الملف يجب أن يكون معقولاً
-  return file.size > 1000 && file.size < 5 * 1024 * 1024; 
-}
-}
+    // التحقق من وجود مؤشرات أمنية مطابقة
+    const groupMatches = REQUIRED_KEYWORDS.map(group => 
+      group.some(kw => rawText.includes(kw))
+    );
+
+    const matchesCount = groupMatches.filter(Boolean).length;
+    if (matchesCount >= 2) return true;
+
+    /*
+     * أغلب ملفات الـPDF تُخزَّن مضغوطة (FlateDecode) فلا يظهر نصها في
+     * البايتات الخام — ومنها قالب SentriX نفسه. الرفض هنا كان يمنع الملف
+     * من الوصول إلى الباك إند أصلاً فلا يعمل التحليل إطلاقاً.
+     */
     const looksCompressed =
       rawText.includes("flatedecode") ||
       rawText.includes("/filter") ||
@@ -280,7 +291,7 @@ export default function NewIncident() {
                 <div className="bg-[#070b16] border border-emerald-500/20 rounded-2xl p-5">
                   <div className="flex items-start gap-4">
                     <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                      <FileType2 size={21} className="text-emerald-400" />
+                      <FileText size={21} className="text-emerald-400" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -306,7 +317,7 @@ export default function NewIncident() {
 
                       <div className="mt-4">
                         <a
-                          href={apiService.incidentTemplateDocxUrl()}
+                          href={wordTemplateUrl()}
                           className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition"
                         >
                           <Download size={16} />
@@ -420,7 +431,6 @@ export default function NewIncident() {
                     Actual Incident Time <span className="text-red-400 ml-1">*</span>
                   </label>
                   <div className="flex items-center bg-[#070b16] border border-white/10 rounded-lg px-3 focus-within:border-emerald-400/60 transition">
-                    <CalendarClock size={16} className="text-gray-500 shrink-0" />
                     <input
                       type="datetime-local"
                       value={incidentTime}
