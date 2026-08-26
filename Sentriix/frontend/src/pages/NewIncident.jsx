@@ -15,7 +15,6 @@ import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
 import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 
 /*
@@ -24,8 +23,7 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 |--------------------------------------------------------------------------
 */
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  pdfjsWorker;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 
 /*
