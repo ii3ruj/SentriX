@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-
+import React, { useState, useEffect } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
+  Sparkles,
   Gauge,
   ListChecks,
   ArrowLeft,
@@ -11,2283 +11,510 @@ import {
   CheckCircle2,
   ChevronDown,
   Loader2,
-  AlertCircle,
 } from "lucide-react";
-
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
+const MOCK_INCIDENTS = [
+  {
+    id: "INC-0001",
+    title: "Ransomware detected on Server-01",
+    source: "EDR",
+    incident_type: "Ransomware",
+    asset_type: "Server",
+    asset_criticality: "Critical",
+    time: "2026-05-26 10:32:15 AM",
+  },
+  {
+    id: "INC-0002",
+    title: "Unusual login from foreign location",
+    source: "SIEM",
+    incident_type: "Brute Force",
+    asset_type: "Workstation",
+    asset_criticality: "Medium",
+    time: "2026-05-25 03:14:02 PM",
+  },
+  {
+    id: "INC-0003",
+    title: "Multiple failed login attempts",
+    source: "AD",
+    incident_type: "Brute Force",
+    asset_type: "Workstation",
+    asset_criticality: "Medium",
+    time: "2026-05-25 09:10:00 AM",
+  },
+  {
+    id: "INC-0004",
+    title: "Data exfiltration attempt blocked",
+    source: "DLP",
+    incident_type: "Insider Threat",
+    asset_type: "Database",
+    asset_criticality: "High",
+    time: "2026-05-25 06:40:00 AM",
+  },
+  {
+    id: "INC-0005",
+    title: "Brute force attack detected",
+    source: "Firewall",
+    incident_type: "Brute Force",
+    asset_type: "Network Device",
+    asset_criticality: "High",
+    time: "2026-05-24 06:05:00 PM",
+  },
+  {
+    id: "INC-0006",
+    title: "Suspicious file execution",
+    source: "Firewall",
+    incident_type: "Malware",
+    asset_type: "Workstation",
+    asset_criticality: "Low",
+    time: "2026-05-23 11:20:00 AM",
+  },
+  {
+    id: "INC-0007",
+    title: "Phishing email detected",
+    source: "EDR",
+    incident_type: "Phishing",
+    asset_type: "Workstation",
+    asset_criticality: "Medium",
+    time: "2026-05-23 08:15:00 AM",
+  },
+  {
+    id: "INC-0008",
+    title: "Privilege escalation attempt",
+    source: "SIEM",
+    incident_type: "Insider Threat",
+    asset_type: "Server",
+    asset_criticality: "High",
+    time: "2026-05-22 02:30:00 PM",
+  },
+  {
+    id: "INC-0009",
+    title: "Malware communication blocked",
+    source: "XDR",
+    incident_type: "Malware",
+    asset_type: "Server",
+    asset_criticality: "Critical",
+    time: "2026-05-22 09:00:00 AM",
+  },
+  {
+    id: "INC-0010",
+    title: "Unauthorized access to database",
+    source: "Proxy",
+    incident_type: "Insider Threat",
+    asset_type: "Database",
+    asset_criticality: "Critical",
+    time: "2026-05-21 10:50:00 PM",
+  },
+];
 
-/* =========================================================
-   INFO ROW
-========================================================= */
+function getStoredIncidents() {
+  try {
+    return JSON.parse(localStorage.getItem("sentrix_incidents") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+const THREAT_CATEGORY = {
+  Ransomware: "Malware",
+  Malware: "Malware",
+  Phishing: "Social Engineering",
+  "Brute Force": "Credential Attack",
+  "Insider Threat": "Internal Threat",
+  DDoS: "Network Attack",
+};
+
+const TEMPORARY_AI_RESULT = {
+  risk_detected: true,
+  risk_score: 87,
+};
+
+function generateFindings(incident) {
+  return [
+    `Suspicious activity related to ${
+      incident.incident_type?.toLowerCase() || incident.threat_type?.toLowerCase() || "unknown activity"
+    } detected on ${incident.asset_type || incident.affected_asset || "target asset"}.`,
+    `Incident originated from telemetry source: ${incident.source || "System Logs"}.`,
+    `Asset criticality classified as ${incident.asset_criticality || incident.severity || "Standard"}.`,
+    "Indicators of compromise (IOCs) are being cross-referenced with known threat patterns and isolation forest baselines.",
+  ];
+}
+
+const severityStyle = {
+  Critical: "text-red-400",
+  High: "text-orange-400",
+  Medium: "text-amber-400",
+  Low: "text-emerald-400",
+  Informational: "text-gray-400",
+};
 
 function InfoRow({ label, value }) {
-  const hasValue =
-    value !== undefined &&
-    value !== null &&
-    value !== "";
-
   return (
-    <div
-      className="
-        flex
-        flex-col
-        sm:flex-row
-
-        sm:items-start
-        sm:justify-between
-
-        gap-1
-        sm:gap-4
-
-        py-3
-
-        border-b
-        border-white/5
-
-        last:border-0
-
-        min-w-0
-      "
-    >
-      <span
-        className="
-          text-sm
-          text-gray-500
-          shrink-0
-        "
-      >
-        {label}
-      </span>
-
-      <span
-        className="
-          text-sm
-          text-gray-100
-          font-medium
-
-          sm:text-right
-
-          sm:max-w-[65%]
-
-          break-words
-          overflow-wrap-anywhere
-        "
-      >
-        {hasValue ? (
-          value
-        ) : (
-          <span
-            className="
-              text-gray-600
-              italic
-            "
-          >
-            Not provided
-          </span>
-        )}
+    <div className="flex items-start justify-between py-2.5 border-b border-white/5 last:border-0">
+      <span className="text-sm text-gray-500">{label}</span>
+      <span className="text-sm text-gray-100 font-medium text-right max-w-[60%]">
+        {value}
       </span>
     </div>
   );
 }
 
-
-/* =========================================================
-   NORMALIZE AI RESPONSE
-========================================================= */
-
-function normalizeAIAnalysis(data) {
-  if (!data) {
-    return null;
-  }
-
-  const result =
-    data.analysis ??
-    data.ai_analysis ??
-    data.result ??
-    data;
-
-  if (
-    !result ||
-    typeof result !== "object"
-  ) {
-    return null;
-  }
-
-  return result;
-}
-
-
-/* =========================================================
-   NORMALIZE INCIDENT
-========================================================= */
-
-function normalizeIncident(data) {
-  if (!data) {
-    return null;
-  }
-
-  return data.incident ?? data;
-}
-
-
-/* =========================================================
-   AI ANALYSIS
-========================================================= */
-
 export default function AIAnalysis() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
-  const [
-    userMenuOpen,
-    setUserMenuOpen,
-  ] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [liveIncident, setLiveIncident] = useState(null);
+  const [serverAIAnalysis, setServerAIAnalysis] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [
-    incident,
-    setIncident,
-  ] = useState(null);
-
-  const [
-    analysis,
-    setAnalysis,
-  ] = useState(null);
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    error,
-    setError,
-  ] = useState(null);
-
-
-  /* =======================================================
-     FETCH SERVER DATA ONLY
-  ======================================================= */
-
+  // جلب تفاصيل الحادثة وتحليل الـ AI الحقيقي مباشرة من السيرفر لمنع أي اختلاف
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
+    const fetchAnalysisData = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
 
-    if (!id) {
-      setLoading(false);
+      try {
+        const [incidentData, aiData] = await Promise.all([
+          apiService.getIncidentById(id).catch(() => null),
+          apiService.getAIAnalysis(id).catch(() => null),
+        ]);
 
-      setError(
-        "No incident ID was provided."
-      );
-
-      return;
-    }
-
-
-    const fetchData =
-      async () => {
-        try {
-          if (mounted) {
-            setError(null);
-          }
-
-
-          /*
-           * SERVER ONLY
-           *
-           * No mock data.
-           * No localStorage.
-           * No static incident fallback.
-           */
-
-          const [
-            incidentResponse,
-            aiResponse,
-          ] = await Promise.all([
-            apiService.getIncidentById(id),
-            apiService.getAIAnalysis(id),
-          ]);
-
-
-          if (!mounted) {
-            return;
-          }
-
-
-          const realIncident =
-            normalizeIncident(
-              incidentResponse
-            );
-
-
-          const realAnalysis =
-            normalizeAIAnalysis(
-              aiResponse
-            );
-
-
-          setIncident(
-            realIncident
-          );
-
-          setAnalysis(
-            realAnalysis
-          );
-
-
-          if (!realIncident) {
-            setError(
-              `Incident ${id} was not found on the server.`
-            );
-          }
-
-        } catch (err) {
-
-          console.error(
-            "AI Analysis API Error:",
-            err
-          );
-
-
-          if (!mounted) {
-            return;
-          }
-
-
-          /*
-           * IMPORTANT:
-           *
-           * If server fails:
-           * do NOT show old/mock data.
-           */
-
-          setIncident(null);
-          setAnalysis(null);
-
-          setError(
-            err?.message ||
-              "Unable to load incident analysis from the server."
-          );
-
-        } finally {
-
-          if (mounted) {
-            setLoading(false);
-          }
-
+        if (isMounted) {
+          if (incidentData) setLiveIncident(incidentData);
+          if (aiData) setServerAIAnalysis(aiData);
         }
-      };
+      } catch (err) {
+        console.warn("Using local incident fallback for AI Analysis:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
 
-
-    fetchData();
-
-
-    /*
-     * AI analysis may finish after
-     * the incident is uploaded.
-     *
-     * Therefore we keep checking
-     * the real backend.
-     */
-
-    const interval =
-      setInterval(
-        fetchData,
-        4000
-      );
-
+    fetchAnalysisData();
+    const interval = setInterval(fetchAnalysisData, 4000);
 
     return () => {
-      mounted = false;
+      isMounted = false;
       clearInterval(interval);
     };
-
   }, [id]);
 
+  const storedIncidents = getStoredIncidents();
+  const allIncidents = [
+    ...(liveIncident ? [liveIncident] : []),
+    ...storedIncidents,
+    ...MOCK_INCIDENTS,
+  ];
 
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
+  const incident = allIncidents.find((inc) => inc.id === id);
 
-  const handleLogout =
-    () => {
-      apiService.logout();
+  const handleLogout = () => {
+    navigate("/login");
+  };
+
+  let analysis = null;
+
+  if (incident) {
+    // الدمج الفوري مع تحليل السيرفر الحقيقي (Server AI Analysis) لتوحيد النتائج تماماً مع الـ PDF
+    const activeRiskScore =
+      serverAIAnalysis?.risk_score ??
+      incident.risk_score ??
+      (incident.severity === "Critical" ? 87 : incident.severity === "High" ? 74 : 52);
+
+    const riskDetected =
+      serverAIAnalysis?.risk_detected ??
+      (incident.flow ? incident.flow === "full_path" : activeRiskScore > 30);
+
+    const severity = serverAIAnalysis?.severity || incident.severity || incident.asset_criticality || "Medium";
+    const threatType = serverAIAnalysis?.threat_type || incident.incident_type || incident.threat_type || incident.title || "Unknown";
+
+    analysis = {
+      incident_id: incident.id,
+      incident_title: serverAIAnalysis?.incident_title || incident.title || "Incident Analysis",
+      severity,
+      time: incident.time || incident.actual_incident_time || incident.created_at || "Just now",
+      source: incident.source || "Ingestion Pipeline",
+      asset: `${incident.asset_type || incident.affected_asset || "Endpoint"}${
+        incident.asset_criticality ? ` (${incident.asset_criticality} criticality)` : ""
+      }`,
+      threat_type: threatType,
+      threat_category: THREAT_CATEGORY[threatType] || serverAIAnalysis?.threat_category || "Automated Threat",
+      risk_detected: riskDetected,
+      risk_score: riskDetected ? activeRiskScore : null,
+      analysis_id: `AI-ANL-${String(incident.id).replace("INC-", "")}`,
+      model_used:
+        serverAIAnalysis?.model_used || incident.model_used || "SentriX Threat Intelligence Model v2.1",
+      analysis_time: incident.created_at
+        ? new Date(incident.created_at).toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })
+        : new Date().toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+      data_sources: `${incident.source || "PDF/Telemetry"}, Threat Intel, Behavioral Logs`,
+      mitre_tactics: serverAIAnalysis?.mitre_tactics || incident.mitre_tactics || "Impact, Execution, Defense Evasion",
+      attack_technique: serverAIAnalysis?.attack_technique || incident.attack_technique || "T1486, T1070, T1059",
+      key_findings:
+        serverAIAnalysis?.key_findings ||
+        (incident.key_findings && Array.isArray(incident.key_findings)
+          ? incident.key_findings
+          : generateFindings(incident)),
     };
-
-
-  /* =======================================================
-     LOADING
-  ======================================================= */
-
-  if (loading) {
-    return (
-      <div
-        className="
-          min-h-screen
-
-          bg-[#070b16]
-
-          text-[#eef5f1]
-
-          flex
-          flex-col
-          lg:flex-row
-
-          overflow-x-hidden
-        "
-      >
-
-        <Sidebar />
-
-        <main
-          className="
-            flex-1
-            min-w-0
-
-            flex
-            items-center
-            justify-center
-
-            p-4
-            sm:p-6
-          "
-        >
-
-          <div
-            className="
-              text-center
-              max-w-sm
-            "
-          >
-
-            <Loader2
-              size={34}
-              className="
-                animate-spin
-
-                text-emerald-400
-
-                mx-auto
-
-                mb-4
-              "
-            />
-
-            <p
-              className="
-                text-sm
-                text-gray-400
-              "
-            >
-              Loading AI analysis...
-            </p>
-
-            <p
-              className="
-                text-xs
-                text-gray-600
-
-                font-mono
-
-                mt-2
-
-                break-all
-              "
-            >
-              {id}
-            </p>
-
-          </div>
-
-        </main>
-
-      </div>
-    );
   }
-
-
-  /* =======================================================
-     INCIDENT NOT FOUND / API ERROR
-  ======================================================= */
-
-  if (!incident) {
-    return (
-      <div
-        className="
-          min-h-screen
-
-          bg-[#070b16]
-
-          text-[#eef5f1]
-
-          flex
-          flex-col
-          lg:flex-row
-
-          overflow-x-hidden
-        "
-      >
-
-        <Sidebar />
-
-        <main
-          className="
-            flex-1
-            min-w-0
-
-            flex
-            items-center
-            justify-center
-
-            p-4
-            sm:p-6
-          "
-        >
-
-          <div
-            className="
-              w-full
-              max-w-md
-
-              bg-[#0c1220]
-
-              border
-              border-red-500/20
-
-              rounded-2xl
-
-              p-5
-              sm:p-8
-
-              text-center
-            "
-          >
-
-            <AlertCircle
-              size={36}
-              className="
-                text-red-400
-
-                mx-auto
-
-                mb-4
-              "
-            />
-
-            <h2
-              className="
-                text-lg
-                font-bold
-
-                mb-2
-              "
-            >
-              Incident Not Found
-            </h2>
-
-            <p
-              className="
-                text-sm
-                text-gray-500
-
-                leading-relaxed
-
-                break-words
-              "
-            >
-              {error ||
-                `Incident ${id} could not be found on the server.`}
-            </p>
-
-
-            <Link
-              to="/incidents"
-              className="
-                inline-flex
-
-                items-center
-
-                justify-center
-
-                gap-2
-
-                mt-6
-
-                px-4
-                py-2.5
-
-                rounded-lg
-
-                text-sm
-
-                text-emerald-400
-
-                bg-emerald-500/10
-
-                border
-                border-emerald-500/20
-
-                hover:bg-emerald-500/15
-
-                transition
-              "
-            >
-
-              <ArrowLeft
-                size={15}
-              />
-
-              Back to Incidents
-
-            </Link>
-
-          </div>
-
-        </main>
-
-      </div>
-    );
-  }
-
-
-  /* =======================================================
-     AI ANALYSIS NOT READY
-  ======================================================= */
-
-  if (!analysis) {
-    return (
-      <div
-        className="
-          min-h-screen
-
-          bg-[#070b16]
-
-          text-[#eef5f1]
-
-          flex
-          flex-col
-          lg:flex-row
-
-          overflow-x-hidden
-        "
-      >
-
-        <Sidebar />
-
-        <div
-          className="
-            flex-1
-
-            min-w-0
-
-            flex
-            flex-col
-          "
-        >
-
-          {/* HEADER */}
-
-          <header
-            className="
-              flex
-              items-center
-              justify-between
-
-              gap-3
-
-              px-4
-              sm:px-6
-              md:px-8
-
-              py-4
-
-              border-b
-              border-white/10
-            "
-          >
-
-            <Link
-              to="/incidents"
-              className="
-                inline-flex
-
-                items-center
-
-                gap-2
-
-                text-sm
-                text-gray-400
-
-                hover:text-gray-200
-
-                transition
-
-                min-w-0
-              "
-            >
-
-              <ArrowLeft
-                size={16}
-                className="shrink-0"
-              />
-
-              <span
-                className="
-                  hidden
-                  sm:inline
-                "
-              >
-                Back to Incidents
-              </span>
-
-              <span
-                className="
-                  sm:hidden
-                "
-              >
-                Back
-              </span>
-
-            </Link>
-
-
-            {/* USER MENU */}
-
-            <div
-              className="
-                relative
-                shrink-0
-              "
-            >
-
-              <button
-                onClick={() =>
-                  setUserMenuOpen(
-                    (prev) =>
-                      !prev
-                  )
-                }
-                className="
-                  flex
-                  items-center
-
-                  gap-2
-                "
-              >
-
-                <div
-                  className="
-                    w-8
-                    h-8
-
-                    rounded-full
-
-                    bg-emerald-500/20
-
-                    flex
-                    items-center
-                    justify-center
-
-                    text-emerald-400
-
-                    text-xs
-                    font-bold
-                  "
-                >
-                  A
-                </div>
-
-
-                <div
-                  className="
-                    hidden
-                    sm:block
-
-                    text-xs
-                    text-left
-                  "
-                >
-
-                  <p
-                    className="
-                      font-semibold
-                    "
-                  >
-                    Analyst
-                  </p>
-
-                  <p
-                    className="
-                      text-gray-500
-                    "
-                  >
-                    SOC Analyst
-                  </p>
-
-                </div>
-
-
-                <ChevronDown
-                  size={14}
-
-                  className={`
-                    text-gray-500
-
-                    transition-transform
-
-                    ${
-                      userMenuOpen
-                        ? "rotate-180"
-                        : ""
-                    }
-                  `}
-                />
-
-              </button>
-
-
-              {userMenuOpen && (
-                <div
-                  className="
-                    absolute
-
-                    right-0
-                    top-full
-
-                    mt-2
-
-                    w-40
-
-                    bg-[#0c1220]
-
-                    border
-                    border-white/10
-
-                    rounded-lg
-
-                    shadow-lg
-
-                    overflow-hidden
-
-                    z-50
-                  "
-                >
-
-                  <button
-                    onClick={
-                      handleLogout
-                    }
-                    className="
-                      flex
-                      items-center
-
-                      gap-2
-
-                      w-full
-
-                      px-4
-                      py-2.5
-
-                      text-sm
-
-                      text-red-400
-
-                      hover:bg-red-500/10
-
-                      transition
-                    "
-                  >
-
-                    <LogOut
-                      size={14}
-                    />
-
-                    Logout
-
-                  </button>
-
-                </div>
-              )}
-
-            </div>
-
-          </header>
-
-
-          {/* PROGRESS */}
-
-          <main
-            className="
-              flex-1
-
-              flex
-              items-center
-              justify-center
-
-              p-4
-              sm:p-6
-              md:p-8
-            "
-          >
-
-            <div
-              className="
-                w-full
-                max-w-lg
-
-                bg-[#0c1220]
-
-                border
-                border-amber-500/20
-
-                rounded-2xl
-
-                p-5
-                sm:p-8
-
-                text-center
-              "
-            >
-
-              <Loader2
-                size={36}
-                className="
-                  text-amber-400
-
-                  animate-spin
-
-                  mx-auto
-
-                  mb-4
-                "
-              />
-
-
-              <h2
-                className="
-                  text-lg
-                  font-bold
-
-                  mb-2
-                "
-              >
-                AI Analysis in Progress
-              </h2>
-
-
-              <p
-                className="
-                  text-sm
-                  text-gray-400
-
-                  leading-relaxed
-                "
-              >
-                The incident was received by
-                the server, but the AI analysis
-                result is not available yet.
-              </p>
-
-
-              <p
-                className="
-                  text-xs
-                  text-gray-600
-
-                  mt-3
-
-                  font-mono
-
-                  break-all
-                "
-              >
-                {incident.id}
-              </p>
-
-            </div>
-
-          </main>
-
-        </div>
-
-      </div>
-    );
-  }
-
-
-  /* =======================================================
-     SERVER VALUES ONLY
-  ======================================================= */
-
-  const severity =
-    analysis.severity ??
-    incident.severity ??
-    null;
-
-
-  const threatType =
-    analysis.threat_type ??
-    incident.incident_type ??
-    incident.threat_type ??
-    null;
-
-
-  const threatCategory =
-    analysis.threat_category ??
-    incident.threat_category ??
-    null;
-
-
-  const riskDetected =
-    analysis.risk_detected;
-
-
-  const riskScore =
-    analysis.risk_score;
-
-
-  const incidentTitle =
-    analysis.incident_title ??
-    incident.title ??
-    null;
-
-
-  const incidentTime =
-    incident.time ??
-    incident.actual_incident_time ??
-    incident.created_at ??
-    null;
-
-
-  const source =
-    incident.source ??
-    null;
-
-
-  const asset =
-    incident.asset_type ??
-    incident.affected_asset ??
-    null;
-
-
-  const assetCriticality =
-    incident.asset_criticality;
-
-
-  const analysisId =
-    analysis.analysis_id ??
-    analysis.id ??
-    null;
-
-
-  const modelUsed =
-    analysis.model_used ??
-    null;
-
-
-  const analysisTime =
-    analysis.analysis_time ??
-    analysis.created_at ??
-    null;
-
-
-  const dataSources =
-    analysis.data_sources;
-
-
-  const mitreTactics =
-    analysis.mitre_tactics;
-
-
-  const attackTechnique =
-    analysis.attack_technique;
-
-
-  const keyFindings =
-    Array.isArray(
-      analysis.key_findings
-    )
-      ? analysis.key_findings
-      : Array.isArray(
-          analysis.findings
-        )
-      ? analysis.findings
-      : [];
-
-
-  const riskIsKnown =
-    typeof riskDetected ===
-    "boolean";
-
-
-  /* =======================================================
-     MAIN UI
-  ======================================================= */
 
   return (
-    <div
-      className="
-        min-h-screen
-
-        bg-[#070b16]
-
-        text-[#eef5f1]
-
-        flex
-        flex-col
-        lg:flex-row
-
-        overflow-x-hidden
-      "
-    >
-
+    <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
+      {/* UNIFIED SIDEBAR */}
       <Sidebar />
 
-
-      <div
-        className="
-          flex-1
-
-          min-w-0
-
-          flex
-          flex-col
-
-          overflow-x-hidden
-        "
-      >
-
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
-        <header
-          className="
-            flex
-            items-center
-            justify-between
-
-            gap-3
-
-            px-4
-            sm:px-6
-            md:px-8
-
-            py-4
-
-            border-b
-            border-white/10
-
-            min-w-0
-          "
-        >
-
+      {/* MAIN */}
+      <div className="flex-1 flex flex-col">
+        {/* HEADER */}
+        <header className="flex items-center justify-between px-8 py-4 border-b border-white/10 relative">
           <Link
             to="/incidents"
-            className="
-              inline-flex
-
-              items-center
-
-              gap-2
-
-              text-sm
-              text-gray-400
-
-              hover:text-gray-200
-
-              transition
-
-              min-w-0
-            "
+            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200"
           >
-
-            <ArrowLeft
-              size={16}
-              className="shrink-0"
-            />
-
-            <span
-              className="
-                truncate
-              "
-            >
-              Back to Incidents
-            </span>
-
+            <ArrowLeft size={16} />
+            Back to Incidents
           </Link>
 
-
-          {/* USER */}
-
-          <div
-            className="
-              relative
-              shrink-0
-            "
-          >
-
+          {/* User */}
+          <div className="relative border-l border-white/10 pl-4">
             <button
-              onClick={() =>
-                setUserMenuOpen(
-                  (prev) =>
-                    !prev
-                )
-              }
-              className="
-                flex
-                items-center
-
-                gap-2
-              "
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              className="flex items-center gap-2"
             >
-
-              <div
-                className="
-                  w-8
-                  h-8
-
-                  rounded-full
-
-                  bg-emerald-500/20
-
-                  flex
-                  items-center
-                  justify-center
-
-                  text-emerald-400
-
-                  text-xs
-                  font-bold
-                "
-              >
+              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs font-bold">
                 A
               </div>
 
-
-              <div
-                className="
-                  hidden
-                  sm:block
-
-                  text-xs
-                  text-left
-                "
-              >
-
-                <p
-                  className="
-                    font-semibold
-                  "
-                >
-                  Analyst
-                </p>
-
-                <p
-                  className="
-                    text-gray-500
-                  "
-                >
-                  SOC Analyst
-                </p>
-
+              <div className="text-xs text-left">
+                <p className="font-semibold">Analyst</p>
+                <p className="text-gray-500">SOC Analyst</p>
               </div>
-
 
               <ChevronDown
                 size={14}
-
-                className={`
-                  text-gray-500
-
-                  transition-transform
-
-                  ${
-                    userMenuOpen
-                      ? "rotate-180"
-                      : ""
-                  }
-                `}
+                className={`text-gray-500 transition-transform ${
+                  userMenuOpen ? "rotate-180" : ""
+                }`}
               />
-
             </button>
 
-
             {userMenuOpen && (
-              <div
-                className="
-                  absolute
-
-                  right-0
-                  top-full
-
-                  mt-2
-
-                  w-40
-
-                  bg-[#0c1220]
-
-                  border
-                  border-white/10
-
-                  rounded-lg
-
-                  shadow-lg
-
-                  overflow-hidden
-
-                  z-50
-                "
-              >
-
+              <div className="absolute right-0 top-full mt-2 w-40 bg-[#0c1220] border border-white/10 rounded-lg shadow-lg overflow-hidden z-10">
                 <button
-                  onClick={
-                    handleLogout
-                  }
-                  className="
-                    flex
-                    items-center
-
-                    gap-2
-
-                    w-full
-
-                    px-4
-                    py-2.5
-
-                    text-sm
-
-                    text-red-400
-
-                    hover:bg-red-500/10
-
-                    transition
-                  "
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition"
                 >
-
-                  <LogOut
-                    size={14}
-                  />
-
+                  <LogOut size={14} />
                   Logout
-
                 </button>
-
               </div>
             )}
-
           </div>
-
         </header>
 
-
-        {/* =================================================
-            CONTENT
-        ================================================= */}
-
-        <main
-          className="
-            flex-1
-
-            overflow-y-auto
-            overflow-x-hidden
-
-            w-full
-
-            p-4
-            sm:p-5
-            md:p-8
-
-            space-y-5
-            md:space-y-6
-
-            pb-8
-
-            min-w-0
-          "
-        >
-
-          {/* =================================================
-              TITLE
-          ================================================= */}
-
-          <div
-            className="
-              min-w-0
-            "
-          >
-
-            <h1
-              className="
-                text-2xl
-                sm:text-3xl
-
-                font-bold
-              "
-            >
-              AI Analysis
-            </h1>
-
-
-            <p
-              className="
-                text-gray-400
-
-                text-sm
-
-                mt-1
-
-                leading-relaxed
-              "
-            >
-              AI-driven analysis and anomaly
-              scoring for the selected incident
-            </p>
-
-          </div>
-
-
-          {/* =================================================
-              INCIDENT SUMMARY
-          ================================================= */}
-
-          <div
-            className="
-              bg-[#0c1220]
-
-              border
-              border-white/10
-
-              rounded-xl
-
-              p-4
-              sm:p-5
-
-              flex
-              flex-col
-              sm:flex-row
-
-              sm:items-center
-              sm:justify-between
-
-              gap-4
-
-              min-w-0
-            "
-          >
-
-            <div
-              className="
-                flex
-                items-start
-
-                gap-3
-                sm:gap-4
-
-                min-w-0
-              "
-            >
-
-              <div
-                className="
-                  w-10
-                  h-10
-
-                  rounded-lg
-
-                  bg-red-500/15
-
-                  flex
-                  items-center
-                  justify-center
-
-                  text-red-400
-
-                  shrink-0
-                "
+        {/* CONTENT */}
+        <main className="flex-1 overflow-y-auto p-8 space-y-6">
+          {!analysis ? (
+            <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-10 text-center">
+              <Sparkles size={32} className="text-emerald-400 mx-auto mb-4" />
+              <h2 className="text-lg font-bold mb-2">No Incident Selected</h2>
+              <p className="text-sm text-gray-400 mb-6">
+                Please upload or create a new incident report to view its AI analysis.
+              </p>
+              <Link
+                to="/new-incident"
+                className="inline-block bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold px-6 py-2.5 rounded-lg hover:opacity-90 transition text-sm"
               >
-
-                <ShieldAlert
-                  size={20}
-                />
-
-              </div>
-
-
-              <div
-                className="
-                  min-w-0
-                "
-              >
-
-                <p
-                  className="
-                    font-semibold
-                    font-mono
-
-                    break-all
-                  "
-                >
-                  {incident.id}
+                + New Incident
+              </Link>
+            </div>
+          ) : (
+            <>
+              {/* PAGE TITLE */}
+              <div>
+                <h1 className="text-2xl font-bold">AI Analysis</h1>
+                <p className="text-gray-400 text-sm">
+                  AI-driven analysis and neural anomaly scoring for the selected incident
                 </p>
-
-
-                <p
-                  className="
-                    text-sm
-                    text-gray-400
-
-                    break-words
-
-                    leading-relaxed
-                  "
-                >
-                  {incidentTitle ??
-                    "Not provided"}
-                </p>
-
-
-                <p
-                  className="
-                    text-xs
-                    text-gray-600
-
-                    mt-1
-
-                    break-words
-
-                    leading-relaxed
-                  "
-                >
-                  {incidentTime ??
-                    "Not provided"}
-
-                  {" • "}
-
-                  {source ??
-                    "Not provided"}
-
-                  {" • "}
-
-                  {asset ??
-                    "Not provided"}
-                </p>
-
               </div>
 
-            </div>
-
-
-            <span
-              className="
-                flex
-                items-center
-
-                gap-1.5
-
-                bg-white/5
-
-                text-gray-300
-
-                border
-                border-white/10
-
-                px-3
-                py-1.5
-
-                rounded-full
-
-                text-xs
-                font-semibold
-
-                self-start
-                sm:self-auto
-
-                whitespace-nowrap
-              "
-            >
-
-              <span
-                className="
-                  w-1.5
-                  h-1.5
-
-                  rounded-full
-
-                  bg-gray-400
-                "
-              />
-
-              {severity ??
-                "Not provided"}
-
-            </span>
-
-          </div>
-
-
-          {/* =================================================
-              THREAT / RISK / SEVERITY
-          ================================================= */}
-
-          <div
-            className="
-              grid
-
-              grid-cols-1
-
-              sm:grid-cols-2
-
-              lg:grid-cols-3
-
-              gap-3
-              sm:gap-4
-            "
-          >
-
-            {/* THREAT */}
-
-            <div
-              className="
-                bg-[#0c1220]
-
-                border
-                border-white/10
-
-                rounded-xl
-
-                p-5
-                sm:p-6
-
-                flex
-                flex-col
-                items-center
-
-                text-center
-
-                min-w-0
-              "
-            >
-
-              <p
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-300
-
-                  mb-3
-                "
-              >
-                Threat Type
-              </p>
-
-
-              <div
-                className="
-                  w-12
-                  h-12
-
-                  rounded-full
-
-                  bg-purple-500/15
-
-                  flex
-                  items-center
-                  justify-center
-
-                  text-purple-400
-
-                  mb-3
-                "
-              >
-
-                <Bug
-                  size={22}
-                />
-
-              </div>
-
-
-              <p
-                className="
-                  text-lg
-                  font-bold
-
-                  text-purple-300
-
-                  break-words
-
-                  max-w-full
-                "
-              >
-                {threatType ??
-                  "Not provided"}
-              </p>
-
-
-              <p
-                className="
-                  text-xs
-                  text-gray-500
-
-                  break-words
-
-                  mt-1
-                "
-              >
-                {threatCategory ??
-                  "Not provided"}
-              </p>
-
-            </div>
-
-
-            {/* RISK */}
-
-            <div
-              className="
-                bg-[#0c1220]
-
-                border
-                border-white/10
-
-                rounded-xl
-
-                p-5
-                sm:p-6
-
-                flex
-                flex-col
-                items-center
-
-                text-center
-
-                min-w-0
-              "
-            >
-
-              <p
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-300
-
-                  mb-3
-                "
-              >
-                Risk Assessment
-              </p>
-
-
-              <div
-                className={`
-                  w-12
-                  h-12
-
-                  rounded-full
-
-                  flex
-                  items-center
-                  justify-center
-
-                  mb-3
-
-                  ${
-                    riskDetected === true
-                      ? "bg-red-500/15 text-red-400"
-                      : riskDetected === false
-                      ? "bg-emerald-500/15 text-emerald-400"
-                      : "bg-gray-500/10 text-gray-400"
-                  }
-                `}
-              >
-
-                <Gauge
-                  size={22}
-                />
-
-              </div>
-
-
-              {!riskIsKnown ? (
-
-                <>
-                  <p
-                    className="
-                      text-lg
-                      font-bold
-
-                      text-gray-300
-                    "
-                  >
-                    Not provided
-                  </p>
-
-                  <p
-                    className="
-                      text-xs
-                      text-gray-500
-
-                      leading-relaxed
-                    "
-                  >
-                    Waiting for server result
-                  </p>
-                </>
-
-              ) : riskDetected ? (
-
-                <>
-                  <p
-                    className="
-                      text-lg
-                      font-bold
-
-                      text-red-400
-                    "
-                  >
-
-                    {riskScore ??
-                      "Not provided"}
-
-                    {riskScore !==
-                      undefined &&
-                      riskScore !==
-                        null && (
-                        <span
-                          className="
-                            text-sm
-                            text-gray-500
-                          "
-                        >
-                          {" "}/ 100
-                        </span>
-                      )}
-
-                  </p>
-
-
-                  <p
-                    className="
-                      text-xs
-                      text-gray-500
-                    "
-                  >
-                    Risk Detected
-                  </p>
-                </>
-
-              ) : (
-
-                <>
-                  <p
-                    className="
-                      text-lg
-                      font-bold
-
-                      text-emerald-400
-                    "
-                  >
-                    No Risk Detected
-                  </p>
-
-                  <p
-                    className="
-                      text-xs
-                      text-gray-500
-
-                      leading-relaxed
-                    "
-                  >
-                    Server reported no detected risk
-                  </p>
-                </>
-
-              )}
-
-            </div>
-
-
-            {/* SEVERITY */}
-
-            <div
-              className="
-                bg-[#0c1220]
-
-                border
-                border-white/10
-
-                rounded-xl
-
-                p-5
-                sm:p-6
-
-                flex
-                flex-col
-                items-center
-
-                text-center
-
-                min-w-0
-
-                sm:col-span-2
-
-                lg:col-span-1
-              "
-            >
-
-              <p
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-300
-
-                  mb-3
-                "
-              >
-                Severity
-              </p>
-
-
-              <div
-                className="
-                  w-12
-                  h-12
-
-                  rounded-full
-
-                  bg-red-500/15
-
-                  flex
-                  items-center
-                  justify-center
-
-                  text-red-400
-
-                  mb-3
-                "
-              >
-
-                <ShieldAlert
-                  size={22}
-                />
-
-              </div>
-
-
-              <p
-                className="
-                  text-lg
-                  font-bold
-
-                  text-gray-300
-
-                  break-words
-                "
-              >
-                {severity ??
-                  "Not provided"}
-              </p>
-
-
-              <p
-                className="
-                  text-xs
-                  text-gray-500
-
-                  leading-relaxed
-
-                  mt-1
-                "
-              >
-                {riskDetected === true
-                  ? "Risk reported by AI service"
-                  : riskDetected === false
-                  ? "No risk reported by AI service"
-                  : "Risk status not provided"}
-              </p>
-
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              NO RISK
-          ================================================= */}
-
-          {riskDetected === false && (
-
-            <div
-              className="
-                bg-emerald-500/5
-
-                border
-                border-emerald-500/20
-
-                rounded-xl
-
-                p-4
-                sm:p-5
-              "
-            >
-
-              <div
-                className="
-                  flex
-                  items-start
-
-                  gap-3
-                "
-              >
-
-                <CheckCircle2
-                  size={20}
-                  className="
-                    text-emerald-400
-
-                    shrink-0
-
-                    mt-0.5
-                  "
-                />
-
-
-                <div
-                  className="
-                    min-w-0
-                  "
-                >
-
-                  <h3
-                    className="
-                      text-sm
-                      font-semibold
-
-                      text-emerald-400
-                    "
-                  >
-                    No Security Risk Detected
-                  </h3>
-
-
-                  <p
-                    className="
-                      text-sm
-                      text-gray-400
-
-                      mt-1
-
-                      leading-relaxed
-                    "
-                  >
-                    The AI service reported no
-                    significant security risk for
-                    this incident.
-                  </p>
-
+              {/* INCIDENT SUMMARY */}
+              <div className="bg-[#0c1220] border border-white/10 rounded-xl p-5 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-red-500/15 flex items-center justify-center text-red-400">
+                    <ShieldAlert size={20} />
+                  </div>
+
+                  <div>
+                    <p className="font-semibold font-mono">{analysis.incident_id}</p>
+                    <p className="text-sm text-gray-400">{analysis.incident_title}</p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {analysis.time} &nbsp;•&nbsp; {analysis.source} &nbsp;•&nbsp; {analysis.asset}
+                    </p>
+                  </div>
                 </div>
 
+                <span className="flex items-center gap-1.5 bg-red-500/10 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-full text-xs font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                  {analysis.severity}
+                </span>
               </div>
 
-            </div>
+              {/* THREAT / RISK / SEVERITY CARDS */}
+              <div className="grid grid-cols-3 gap-4">
+                {/* THREAT TYPE */}
+                <div className="bg-[#0c1220] border border-white/10 rounded-xl p-6 flex flex-col items-center text-center">
+                  <p className="text-sm font-semibold text-gray-300 mb-3">Threat Type</p>
+                  <div className="w-12 h-12 rounded-full bg-purple-500/15 flex items-center justify-center text-purple-400 mb-3">
+                    <Bug size={22} />
+                  </div>
+                  <p className="text-lg font-bold text-purple-300">{analysis.threat_type}</p>
+                  <p className="text-xs text-gray-500">{analysis.threat_category}</p>
+                </div>
 
-          )}
-
-
-          {/* =================================================
-              AI SUMMARY
-          ================================================= */}
-
-          <div
-            className="
-              bg-[#0c1220]
-
-              border
-              border-white/10
-
-              rounded-xl
-
-              p-4
-              sm:p-5
-              md:p-6
-
-              min-w-0
-            "
-          >
-
-            <div
-              className="
-                flex
-                items-center
-
-                gap-2
-
-                mb-4
-              "
-            >
-
-              <ListChecks
-                size={17}
-                className="
-                  text-emerald-400
-                  shrink-0
-                "
-              />
-
-              <h2
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-200
-                "
-              >
-                AI Analysis Summary
-              </h2>
-
-            </div>
-
-
-            <div
-              className="
-                grid
-
-                grid-cols-1
-
-                lg:grid-cols-2
-
-                gap-5
-                lg:gap-8
-              "
-            >
-
-              {/* LEFT */}
-
-              <div
-                className="
-                  min-w-0
-                "
-              >
-
-                <InfoRow
-                  label="Analysis ID"
-                  value={analysisId}
-                />
-
-                <InfoRow
-                  label="Model Used"
-                  value={modelUsed}
-                />
-
-                <InfoRow
-                  label="Analysis Time"
-                  value={analysisTime}
-                />
-
-                <InfoRow
-                  label="Data Sources"
-                  value={dataSources}
-                />
-
-                <InfoRow
-                  label="MITRE ATT&CK Tactics"
-                  value={mitreTactics}
-                />
-
-                <InfoRow
-                  label="Attack Technique"
-                  value={attackTechnique}
-                />
-
-                <InfoRow
-                  label="Asset Criticality"
-                  value={assetCriticality}
-                />
-
-              </div>
-
-
-              {/* RIGHT */}
-
-              <div
-                className="
-                  min-w-0
-                "
-              >
-
-                <p
-                  className="
-                    text-sm
-                    font-semibold
-                    text-gray-300
-
-                    mb-3
-                  "
-                >
-                  Key Findings
-                </p>
-
-
-                {keyFindings.length >
-                0 ? (
-
-                  <ul
-                    className="
-                      space-y-3
-                    "
+                {/* RISK ASSESSMENT */}
+                <div className="bg-[#0c1220] border border-white/10 rounded-xl p-6 flex flex-col items-center text-center">
+                  <p className="text-sm font-semibold text-gray-300 mb-3">Risk Assessment</p>
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${
+                      analysis.risk_detected
+                        ? "bg-amber-500/15 text-amber-400"
+                        : "bg-emerald-500/15 text-emerald-400"
+                    }`}
                   >
+                    <Gauge size={22} />
+                  </div>
 
-                    {keyFindings.map(
-                      (
-                        finding,
-                        index
-                      ) => (
+                  {analysis.risk_detected ? (
+                    <>
+                      <p className="text-lg font-bold text-amber-400">
+                        {analysis.risk_score} <span className="text-sm text-gray-500">/ 100</span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {analysis.risk_score >= 80
+                          ? "Severe Risk"
+                          : analysis.risk_score >= 60
+                          ? "High Risk"
+                          : "Moderate Risk"}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-bold text-emerald-400">No Risk Detected</p>
+                      <p className="text-xs text-gray-500">No significant security risk identified</p>
+                    </>
+                  )}
+                </div>
 
-                        <li
-                          key={index}
-                          className="
-                            flex
-                            items-start
+                {/* SEVERITY */}
+                <div className="bg-[#0c1220] border border-white/10 rounded-xl p-6 flex flex-col items-center text-center">
+                  <p className="text-sm font-semibold text-gray-300 mb-3">Severity</p>
+                  <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center text-red-400 mb-3">
+                    <ShieldAlert size={22} />
+                  </div>
+                  <p
+                    className={`text-lg font-bold ${
+                      severityStyle[analysis.severity] || "text-gray-300"
+                    }`}
+                  >
+                    {analysis.severity}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {analysis.risk_detected
+                      ? analysis.severity === "Critical" || analysis.severity === "High"
+                        ? "Immediate Action Required"
+                        : "Monitor and Review"
+                      : "No Risk Identified"}
+                  </p>
+                </div>
+              </div>
 
-                            gap-2
+              {/* NO RISK MESSAGE */}
+              {!analysis.risk_detected && (
+                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2
+                      size={20}
+                      className="text-emerald-400 shrink-0 mt-0.5"
+                    />
+                    <div>
+                      <h3 className="text-sm font-semibold text-emerald-400">
+                        No Security Risk Detected
+                      </h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        The AI analysis did not identify a significant security risk in this incident.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-                            text-sm
-                            text-gray-300
+              {/* AI SUMMARY */}
+              <div className="bg-[#0c1220] border border-white/10 rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ListChecks size={16} className="text-emerald-400" />
+                  <h2 className="text-sm font-semibold text-gray-200">AI Analysis Summary</h2>
+                </div>
 
-                            leading-relaxed
+                <div className="grid grid-cols-2 gap-8">
+                  {/* LEFT */}
+                  <div>
+                    <InfoRow label="Analysis ID" value={analysis.analysis_id} />
+                    <InfoRow label="Model Used" value={analysis.model_used} />
+                    <InfoRow label="Analysis Time" value={analysis.analysis_time} />
+                    <InfoRow label="Data Sources" value={analysis.data_sources} />
+                    <InfoRow label="MITRE ATT&CK Tactics" value={analysis.mitre_tactics} />
+                    <InfoRow label="Attack Technique" value={analysis.attack_technique} />
+                  </div>
 
-                            min-w-0
-                          "
-                        >
-
+                  {/* RIGHT */}
+                  <div>
+                    <p className="text-sm font-semibold text-gray-300 mb-3">Key Findings</p>
+                    <ul className="space-y-2.5">
+                      {analysis.key_findings.map((finding, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
                           <CheckCircle2
                             size={16}
-                            className="
-                              text-emerald-400
-
-                              shrink-0
-
-                              mt-0.5
-                            "
+                            className="text-emerald-400 shrink-0 mt-0.5"
                           />
-
-
-                          <span
-                            className="
-                              break-words
-
-                              overflow-wrap-anywhere
-                            "
-                          >
-                            {finding}
-                          </span>
-
+                          <span>{finding}</span>
                         </li>
-
-                      )
-                    )}
-
-                  </ul>
-
-                ) : (
-
-                  <p
-                    className="
-                      text-sm
-                      text-gray-600
-
-                      italic
-
-                      leading-relaxed
-                    "
-                  >
-                    No key findings were
-                    returned by the AI service.
-                  </p>
-
-                )}
-
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </div>
 
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              RECOMMENDATIONS
-          ================================================= */}
-
-          {riskDetected === true && (
-
-            <div
-              className="
-                text-center
-
-                px-2
-              "
-            >
-
-              <Link
-                to={`/recommendations/${id}`}
-                className="
-                  inline-flex
-
-                  items-center
-                  justify-center
-
-                  gap-2
-
-                  border-2
-                  border-dashed
-                  border-emerald-500/40
-
-                  text-emerald-400
-
-                  px-5
-                  sm:px-6
-
-                  py-3
-
-                  rounded-xl
-
-                  text-sm
-                  font-semibold
-
-                  hover:bg-emerald-500/5
-
-                  transition
-
-                  max-w-full
-                "
-              >
-                View Recommendations →
-              </Link>
-
-
-              <p
-                className="
-                  text-xs
-                  text-gray-600
-
-                  mt-2
-
-                  leading-relaxed
-                "
-              >
-                View AI recommendations and
-                mitigation playbooks based on
-                this incident's risk score.
-              </p>
-
-            </div>
-
+              {/* RISK RECOMMENDATIONS LINK */}
+              {analysis.risk_detected && (
+                <div className="text-center">
+                  <Link
+                    to={`/recommendations/${id}`}
+                    className="inline-flex items-center gap-2 border-2 border-dashed border-emerald-500/40 text-emerald-400 px-6 py-3 rounded-xl text-sm font-semibold hover:bg-emerald-500/5 transition"
+                  >
+                    View Recommendations →
+                  </Link>
+                  <p className="text-xs text-gray-600 mt-2">
+                    View AI recommendations and mitigation playbooks based on this incident's risk score
+                  </p>
+                </div>
+              )}
+            </>
           )}
-
         </main>
-
       </div>
-
     </div>
   );
 }

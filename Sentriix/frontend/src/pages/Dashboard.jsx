@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MessageSquare,
   AlertCircle,
@@ -6,7 +6,6 @@ import {
   Clock,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-
 import {
   LineChart,
   Line,
@@ -19,36 +18,21 @@ import {
   Pie,
   Cell,
 } from "recharts";
-
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
+/* ================= بيانات وهمية احتياطية (Fallback Data) ================= */
 
-/* =========================================================
-   CONSTANTS
-========================================================= */
+const defaultAttackTypes = [
+  { name: "Ransomware", value: 34, percent: 27, color: "#f97316" },
+  { name: "Phishing", value: 30, percent: 23, color: "#ef4444" },
+  { name: "Malware", value: 26, percent: 20, color: "#22c55e" },
+  { name: "Brute Force", value: 20, percent: 16, color: "#06b6d4" },
+  { name: "Insider Threat", value: 12, percent: 9, color: "#3b82f6" },
+  { name: "Other", value: 6, percent: 5, color: "#9ca3af" },
+];
 
-const SEVERITY_PRIORITY = {
-  Critical: 3,
-  High: 2,
-  Medium: 1,
-  Low: 0,
-};
-
-const SEVERITY_STYLE = {
-  Critical:
-    "bg-red-500/10 text-red-400 border-red-500/30",
-
-  High:
-    "bg-orange-500/10 text-orange-400 border-orange-500/30",
-
-  Medium:
-    "bg-amber-500/10 text-amber-400 border-amber-500/30",
-
-  Low:
-    "bg-gray-500/10 text-gray-400 border-gray-500/30",
-};
-
+/* ألوان ثابتة تُستخدم لتلوين أنواع الهجمات القادمة من الـ API */
 const ATTACK_COLORS = [
   "#f97316",
   "#ef4444",
@@ -58,982 +42,213 @@ const ATTACK_COLORS = [
   "#9ca3af",
 ];
 
-
-/* =========================================================
-   HELPERS
-========================================================= */
-
-function readNumber(...values) {
-  for (const value of values) {
-    if (
-      value !== undefined &&
-      value !== null &&
-      value !== "" &&
-      !Number.isNaN(Number(value))
-    ) {
-      return Number(value);
-    }
-  }
-
-  return null;
-}
-
-
-/* =========================================================
-   DASHBOARD TOTALS
-========================================================= */
-
-function extractDashboardTotals(statsData) {
-  const totals = statsData?.totals || {};
-  const severityCounts =
-    statsData?.severityCounts || {};
-
-  return {
-    total: readNumber(
-      totals.total,
-      totals.totalIncidents,
-      totals.incidents,
-      statsData?.total,
-      statsData?.totalIncidents
-    ),
-
-    critical: readNumber(
-      totals.critical,
-      totals.criticalIncidents,
-      severityCounts.Critical,
-      severityCounts.critical,
-      statsData?.critical,
-      statsData?.criticalIncidents
-    ),
-
-    analyzed: readNumber(
-      totals.analyzed,
-      totals.analyzedIncidents,
-      statsData?.analyzed,
-      statsData?.analyzedIncidents
-    ),
-
-    pending: readNumber(
-      totals.pending,
-      totals.pendingAnalysis,
-      statsData?.pending,
-      statsData?.pendingAnalysis
-    ),
-  };
-}
-
-
-/* =========================================================
-   ATTACK TYPES
-========================================================= */
-
-function normalizeAttackTypes(list) {
-  if (!Array.isArray(list)) {
-    return [];
-  }
-
-  const total = list.reduce(
-    (sum, item) =>
-      sum + Number(item?.value || 0),
-    0
-  );
-
-  return list.map((item, index) => ({
-    name:
-      item?.name ||
-      item?.type ||
-      item?.attack_type ||
-      "Unknown",
-
-    value: Number(
-      item?.value || 0
-    ),
-
-    percent:
-      total > 0
-        ? Math.round(
-            (Number(item?.value || 0) /
-              total) *
-              100
-          )
-        : 0,
-
-    color:
-      item?.color ||
-      ATTACK_COLORS[
-        index % ATTACK_COLORS.length
-      ],
+/* الـ API يرجع { name, value } فقط — نضيف اللون والنسبة هنا للعرض */
+function decorateAttackTypes(list) {
+  const total = list.reduce((sum, t) => sum + (t.value || 0), 0);
+  return list.map((t, i) => ({
+    name: t.name,
+    value: t.value || 0,
+    percent: total > 0 ? Math.round(((t.value || 0) / total) * 100) : 0,
+    color: t.color || ATTACK_COLORS[i % ATTACK_COLORS.length],
   }));
 }
 
+const SEVERITY_PRIORITY = {
+  Critical: 3,
+  High: 2,
+  Medium: 1,
+  Low: 0,
+};
 
-/* =========================================================
-   INCIDENT NORMALIZATION
-========================================================= */
+const severityStyle = {
+  Critical: "bg-red-500/10 text-red-400 border-red-500/30",
+  High: "bg-orange-500/10 text-orange-400 border-orange-500/30",
+  Medium: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  Low: "bg-gray-500/10 text-gray-400 border-gray-500/30",
+};
 
-function normalizeIncidents(data) {
-  if (!Array.isArray(data)) {
-    return [];
+const fallbackIncidents = [
+  {
+    id: "INC-0001",
+    title: "Ransomware detected on Server-01",
+    severity: "Critical",
+    source: "EDR",
+    time: "10m ago",
+    hasAiResult: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "INC-0002",
+    title: "Unusual login from foreign location",
+    severity: "High",
+    source: "SIEM",
+    time: "45m ago",
+    hasAiResult: true,
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+  },
+  {
+    id: "INC-0003",
+    title: "Multiple failed login attempts",
+    severity: "Medium",
+    source: "AD",
+    time: "1h ago",
+    hasAiResult: false,
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+  },
+];
+
+/* دالة توزيع الحوادث على مدار ساعات اليوم */
+function getTodayHourlyData(list) {
+  const todayKey = new Date().toISOString().split("T")[0];
+  const hours = [];
+
+  for (let h = 0; h < 24; h++) {
+    const label =
+      h === 0
+        ? "12 AM"
+        : h < 12
+        ? `${h} AM`
+        : h === 12
+        ? "12 PM"
+        : `${h - 12} PM`;
+
+    const count = list.filter((inc) => {
+      if (!inc.created_at) return false;
+      const incDate = new Date(inc.created_at);
+      return (
+        inc.created_at.startsWith(todayKey) && incDate.getHours() === h
+      );
+    }).length;
+
+    hours.push({ hour: label, count });
   }
 
-  return data.map((item, index) => ({
-    id: item?.id
-      ? String(item.id).startsWith("INC")
-        ? item.id
-        : `INC-${String(item.id).padStart(
-            4,
-            "0"
-          )}`
-      : `INC-${index + 1}`,
-
-    /*
-     * SERVER VALUE ONLY
-     * If backend does not provide a title,
-     * show "—" instead of inventing one.
-     */
-
-    title:
-      item?.title ??
-      item?.threat_type ??
-      item?.incident_type ??
-      "—",
-
-    /*
-     * SERVER VALUE ONLY
-     */
-
-    severity:
-      item?.severity ??
-      "—",
-
-    /*
-     * SERVER VALUE ONLY
-     */
-
-    source:
-      item?.source ??
-      "—",
-
-    time: item?.created_at
-      ? new Date(
-          item.created_at
-        ).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : "—",
-
-    hasAiResult: Boolean(
-      item?.ai_results ||
-        item?.hasAiResult ||
-        item?.ai_score ||
-        item?.ai_analysis
-    ),
-
-    created_at:
-      item?.created_at || null,
-  }));
+  return hours;
 }
 
-
-/* =========================================================
-   TREND DATA
-========================================================= */
-
-function normalizeTrendData(trends) {
-  if (!trends) {
-    return [];
-  }
-
-  let source = null;
-
-  if (Array.isArray(trends)) {
-    source = trends;
-
-  } else if (
-    Array.isArray(trends.hourly)
-  ) {
-    source = trends.hourly;
-
-  } else if (
-    Array.isArray(trends.data)
-  ) {
-    source = trends.data;
-
-  } else if (
-    Array.isArray(trends.incidents)
-  ) {
-    source = trends.incidents;
-
-  } else if (
-    Array.isArray(trends.overTime)
-  ) {
-    source = trends.overTime;
-  }
-
-  if (!source) {
-    return [];
-  }
-
-  return source
-    .map((item, index) => ({
-      hour:
-        item?.hour ??
-        item?.label ??
-        item?.time ??
-        item?.date ??
-        `${index + 1}`,
-
-      count: Number(
-        item?.count ??
-          item?.value ??
-          item?.total ??
-          item?.incidents ??
-          0
-      ),
-    }))
-    .filter(
-      (item) =>
-        item.hour !== undefined &&
-        item.hour !== null
-    );
-}
-
-
-/* =========================================================
-   TREND VALUE
-========================================================= */
-
-function getTrendValue(
-  trends,
-  key
-) {
-  const trend =
-    trends?.[key];
-
-  if (
-    trend === undefined ||
-    trend === null
-  ) {
-    return "—";
-  }
-
-  if (
-    typeof trend === "object"
-  ) {
-    return (
-      trend.change ??
-      trend.value ??
-      "—"
-    );
-  }
-
-  return trend;
-}
-
-
-/* =========================================================
-   DASHBOARD
-========================================================= */
+/* ================= الصفحة ================= */
 
 export default function Dashboard() {
-  const [
-    incidentsList,
-    setIncidentsList,
-  ] = useState([]);
+  const [incidentsList, setIncidentsList] = useState(fallbackIncidents);
+  const [attackTypes, setAttackTypes] = useState(defaultAttackTypes);
+  const [trends, setTrends] = useState(null);
 
-  const [
-    dashboardStats,
-    setDashboardStats,
-  ] = useState(null);
-
-  const [
-    attackTypes,
-    setAttackTypes,
-  ] = useState([]);
-
-  const [
-    trends,
-    setTrends,
-  ] = useState(null);
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    error,
-    setError,
-  ] = useState(null);
-
-
-  /* =======================================================
-     FETCH SERVER DATA ONLY
-  ======================================================= */
-
+  // جلب البيانات من الـ API وتحديثها تلقائياً
   useEffect(() => {
     let isMounted = true;
 
-    const fetchDashboard =
-      async () => {
-        try {
-          if (isMounted) {
-            setError(null);
-            setLoading(true);
-          }
-
-          /*
-           * SERVER DATA ONLY
-           *
-           * No Mock Data
-           * No localStorage
-           * No fallback data
-           */
-
-          const [
-            liveIncidents,
-            statsData,
-          ] = await Promise.all([
-            apiService.getIncidents(),
-            apiService.getDashboardStats(),
-          ]);
-
-
-          if (!isMounted) {
-            return;
-          }
-
-
-          /* =================================================
-             INCIDENTS
-          ================================================= */
-
-          if (
-            Array.isArray(
-              liveIncidents
-            )
-          ) {
-            setIncidentsList(
-              normalizeIncidents(
-                liveIncidents
-              )
-            );
-
-          } else if (
-            Array.isArray(
-              liveIncidents?.incidents
-            )
-          ) {
-            setIncidentsList(
-              normalizeIncidents(
-                liveIncidents.incidents
-              )
-            );
-
-          } else {
-            setIncidentsList([]);
-          }
-
-
-          /* =================================================
-             DASHBOARD STATS
-          ================================================= */
-
-          setDashboardStats(
-            statsData || null
-          );
-
-
-          /* =================================================
-             ATTACK TYPES
-          ================================================= */
-
-          setAttackTypes(
-            normalizeAttackTypes(
-              statsData?.attackTypes
-            )
-          );
-
-
-          /* =================================================
-             TRENDS
-          ================================================= */
-
-          /*
-           * IMPORTANT:
-           * Do NOT create fake trend values.
-           *
-           * If backend does not return trends,
-           * the chart remains empty.
-           */
-
-          setTrends(
-            statsData?.trends ||
-            null
-          );
-
-
-          setLoading(false);
-
-        } catch (err) {
-
-          console.error(
-            "Dashboard API Error:",
-            err
-          );
-
-
-          if (!isMounted) {
-            return;
-          }
-
-
-          /*
-           * NO MOCK FALLBACK
-           */
-
-          setIncidentsList([]);
-          setAttackTypes([]);
-          setDashboardStats(null);
-          setTrends(null);
-
-
-          setError(
-            err?.message ||
-              "Unable to load dashboard data."
-          );
-
-
-          setLoading(false);
+    const fetchLiveDashboard = async () => {
+      try {
+        // جلب قائمة الحوادث الحقيقية
+        const liveIncidents = await apiService.getIncidents();
+        if (isMounted && Array.isArray(liveIncidents) && liveIncidents.length > 0) {
+          const formatted = liveIncidents.map((item, idx) => ({
+            id: item.id ? (String(item.id).startsWith("INC") ? item.id : `INC-${String(item.id).padStart(4, "0")}`) : `INC-${idx + 1}`,
+            title: item.title || item.threat_type || "Security Incident",
+            severity: item.severity || "Medium",
+            source: item.source || "System",
+            time: item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
+            hasAiResult: Boolean(item.ai_results || item.hasAiResult || item.ai_score),
+            created_at: item.created_at || new Date().toISOString(),
+          }));
+          setIncidentsList(formatted);
         }
-      };
 
+        // جلب توزيع أنواع الهجمات ونسب التغيّر من مسار الإحصائيات
+        const statsData = await apiService.getDashboardStats().catch(() => null);
+        if (isMounted && statsData) {
+          if (Array.isArray(statsData.attackTypes) && statsData.attackTypes.length > 0) {
+            setAttackTypes(decorateAttackTypes(statsData.attackTypes));
+          }
+          if (statsData.trends) {
+            setTrends(statsData.trends);
+          }
+        }
+      } catch (err) {
+        console.warn("Using fallback dashboard data:", err);
+      }
+    };
 
-    fetchDashboard();
-
-
-    /* =====================================================
-       AUTO REFRESH
-    ===================================================== */
-
-    const interval =
-      setInterval(
-        fetchDashboard,
-        5000
-      );
-
+    fetchLiveDashboard();
+    const interval = setInterval(fetchLiveDashboard, 5000); // تحديث فوري كل 5 ثوانٍ
 
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-
   }, []);
 
+  // ترتيب الحوادث حسب الأهمية
+  const sortedIncidents = [...incidentsList].sort(
+    (a, b) =>
+      (SEVERITY_PRIORITY[b.severity] || 0) - (SEVERITY_PRIORITY[a.severity] || 0)
+  );
 
-  /* =======================================================
-     SORT INCIDENTS
-  ======================================================= */
-
-  const sortedIncidents =
-    useMemo(
-      () =>
-        [...incidentsList].sort(
-          (a, b) =>
-            (
-              SEVERITY_PRIORITY[
-                b.severity
-              ] || 0
-            ) -
-            (
-              SEVERITY_PRIORITY[
-                a.severity
-              ] || 0
-            )
-        ),
-      [incidentsList]
-    );
-
-
-  /* =======================================================
-     DASHBOARD TOTALS
-  ======================================================= */
-
-  const totals =
-    extractDashboardTotals(
-      dashboardStats
-    );
-
-
-  const totalIncidents =
-    totals.total ?? 0;
-
-  const criticalCount =
-    totals.critical ?? 0;
-
-  const analyzedCount =
-    totals.analyzed ?? 0;
-
-  const pendingCount =
-    totals.pending ?? 0;
-
-
-  /* =======================================================
-     ATTACK TOTAL
-  ======================================================= */
-
-  const attackTotal =
-    attackTypes.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.value || 0
-        ),
-      0
-    );
-
-
-  /* =======================================================
-     CHART
-  ======================================================= */
-
-  const lineData =
-    normalizeTrendData(
-      trends
-    );
-
-
-  /* =======================================================
-     KPI DATA
-  ======================================================= */
+  // حساب الإحصائيات
+  const analyzedCount = sortedIncidents.filter((i) => i.hasAiResult).length;
+  const pendingCount = sortedIncidents.filter((i) => !i.hasAiResult).length;
+  const criticalCount = sortedIncidents.filter((i) => i.severity === "Critical").length;
+  const attackTotal = attackTypes.reduce((sum, t) => sum + t.value, 0);
 
   const stats = [
     {
-      label:
-        "Total Incidents",
-
-      value:
-        totalIncidents,
-
-      change:
-        getTrendValue(
-          trends,
-          "total"
-        ),
-
-      positive:
-        trends?.total?.positive ??
-        true,
-
-      icon:
-        MessageSquare,
-
-      color:
-        "text-blue-400",
-
-      bg:
-        "bg-blue-500/10",
+      label: "Total Incidents",
+      value: sortedIncidents.length,
+      change: trends?.total?.change ?? "—",
+      positive: trends?.total?.positive ?? true,
+      icon: MessageSquare,
+      color: "text-blue-400",
+      bg: "bg-blue-500/10",
     },
-
     {
-      label:
-        "Critical Incidents",
-
-      value:
-        criticalCount,
-
-      change:
-        getTrendValue(
-          trends,
-          "critical"
-        ),
-
-      positive:
-        trends?.critical?.positive ??
-        false,
-
-      icon:
-        AlertCircle,
-
-      color:
-        "text-red-400",
-
-      bg:
-        "bg-red-500/10",
+      label: "Critical Incidents",
+      value: criticalCount,
+      change: trends?.critical?.change ?? "—",
+      positive: trends?.critical?.positive ?? false,
+      icon: AlertCircle,
+      color: "text-red-400",
+      bg: "bg-red-500/10",
     },
-
     {
-      label:
-        "Analyzed Incidents",
-
-      value:
-        analyzedCount,
-
-      change:
-        getTrendValue(
-          trends,
-          "analyzed"
-        ),
-
-      positive:
-        trends?.analyzed?.positive ??
-        true,
-
-      icon:
-        CheckCircle2,
-
-      color:
-        "text-emerald-400",
-
-      bg:
-        "bg-emerald-500/10",
+      label: "Analyzed Incidents",
+      value: analyzedCount,
+      change: trends?.analyzed?.change ?? "—",
+      positive: trends?.analyzed?.positive ?? true,
+      icon: CheckCircle2,
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
     },
-
     {
-      label:
-        "Pending Analysis",
-
-      value:
-        pendingCount,
-
-      change:
-        getTrendValue(
-          trends,
-          "pending"
-        ),
-
-      positive:
-        trends?.pending?.positive ??
-        false,
-
-      icon:
-        Clock,
-
-      color:
-        "text-amber-400",
-
-      bg:
-        "bg-amber-500/10",
+      label: "Pending Analysis",
+      value: pendingCount,
+      change: trends?.pending?.change ?? "—",
+      positive: trends?.pending?.positive ?? false,
+      icon: Clock,
+      color: "text-amber-400",
+      bg: "bg-amber-500/10",
     },
   ];
 
-
-  /* =======================================================
-     LOADING
-  ======================================================= */
-
-  if (loading) {
-    return (
-      <div
-        className="
-          min-h-screen
-          w-full
-
-          bg-[#070b16]
-          text-[#eef5f1]
-
-          flex
-          flex-col
-          lg:flex-row
-
-          overflow-x-hidden
-        "
-      >
-
-        <Sidebar />
-
-        <main
-          className="
-            flex-1
-            min-w-0
-
-            flex
-            items-center
-            justify-center
-
-            p-4
-            sm:p-6
-          "
-        >
-
-          <div
-            className="
-              text-center
-              text-gray-400
-
-              max-w-xs
-            "
-          >
-
-            <div
-              className="
-                w-8
-                h-8
-
-                border-2
-                border-emerald-400
-                border-t-transparent
-
-                rounded-full
-
-                animate-spin
-
-                mx-auto
-                mb-3
-              "
-            />
-
-            <p className="text-sm">
-              Loading dashboard data...
-            </p>
-
-          </div>
-
-        </main>
-
-      </div>
-    );
-  }
-
-
-  /* =======================================================
-     ERROR
-  ======================================================= */
-
-  if (error) {
-    return (
-      <div
-        className="
-          min-h-screen
-          w-full
-
-          bg-[#070b16]
-          text-[#eef5f1]
-
-          flex
-          flex-col
-          lg:flex-row
-
-          overflow-x-hidden
-        "
-      >
-
-        <Sidebar />
-
-        <main
-          className="
-            flex-1
-            min-w-0
-
-            flex
-            items-center
-            justify-center
-
-            p-4
-            sm:p-6
-          "
-        >
-
-          <div
-            className="
-              w-full
-              max-w-md
-
-              bg-[#0c1220]
-
-              border
-              border-red-500/20
-
-              rounded-2xl
-
-              p-5
-              sm:p-6
-
-              text-center
-            "
-          >
-
-            <AlertCircle
-              className="
-                text-red-400
-                mx-auto
-                mb-3
-              "
-              size={32}
-            />
-
-            <h2
-              className="
-                font-semibold
-                mb-2
-              "
-            >
-              Unable to load dashboard
-            </h2>
-
-            <p
-              className="
-                text-sm
-                text-gray-500
-
-                break-words
-
-                leading-relaxed
-              "
-            >
-              {error}
-            </p>
-
-          </div>
-
-        </main>
-
-      </div>
-    );
-  }
-
-
-  /* =======================================================
-     UI
-  ======================================================= */
+  const lineData = getTodayHourlyData(sortedIncidents);
 
   return (
-    <div
-      className="
-        min-h-screen
-        w-full
-
-        bg-[#070b16]
-        text-[#eef5f1]
-
-        flex
-        flex-col
-        lg:flex-row
-
-        overflow-x-hidden
-      "
-    >
-
+    <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
+      {/* ================= UNIFIED SIDEBAR ================= */}
       <Sidebar />
 
-
-      <div
-        className="
-          flex-1
-
-          flex
-          flex-col
-
-          min-w-0
-
-          overflow-x-hidden
-        "
-      >
-
-        <main
-          className="
-            flex-1
-
-            overflow-y-auto
-            overflow-x-hidden
-
-            p-3
-            min-[360px]:p-4
-            sm:p-5
-            md:p-6
-            lg:p-8
-
-            space-y-4
-            sm:space-y-5
-            lg:space-y-6
-
-            pb-8
-
-            min-w-0
-          "
-        >
-
-          {/* =================================================
-              HEADER
-          ================================================= */}
-
-          <div
-            className="
-              flex
-
-              flex-col
-              sm:flex-row
-
-              sm:items-center
-              sm:justify-between
-
-              gap-2
-
-              min-w-0
-            "
-          >
-
-            <div
-              className="
-                min-w-0
-              "
-            >
-
-              <h1
-                className="
-                  text-xl
-                  min-[360px]:text-2xl
-                  sm:text-3xl
-
-                  font-bold
-
-                  leading-tight
-                "
-              >
-                Dashboard
-              </h1>
-
-              <p
-                className="
-                  text-gray-400
-
-                  text-xs
-                  sm:text-sm
-
-                  mt-1
-
-                  leading-relaxed
-                "
-              >
-                Overview of your security environment
-              </p>
-
-            </div>
-
+      {/* ================= MAIN CONTENT ================= */}
+      <div className="flex-1 flex flex-col">
+        <main className="flex-1 overflow-y-auto p-8 space-y-6">
+          {/* ================= TITLE ================= */}
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <p className="text-gray-400 text-sm">
+              Overview of your security environment
+            </p>
           </div>
 
-
-          {/* =================================================
-              KPI CARDS
-          ================================================= */}
-
-          <div
-            className="
-              grid
-
-              grid-cols-1
-              min-[360px]:grid-cols-2
-              lg:grid-cols-4
-
-              gap-2
-              min-[360px]:gap-3
-              sm:gap-4
-
-              min-w-0
-            "
-          >
-
+          {/* ================= STAT CARDS ================= */}
+          <div className="grid grid-cols-4 gap-4">
             {stats.map(
               ({
                 label,
@@ -1044,1022 +259,188 @@ export default function Dashboard() {
                 color,
                 bg,
               }) => (
-
                 <div
                   key={label}
-                  className="
-                    bg-[#0c1220]
-
-                    border
-                    border-white/10
-
-                    rounded-xl
-
-                    p-3
-                    min-[360px]:p-3.5
-                    sm:p-5
-                    md:p-6
-
-                    min-w-0
-
-                    overflow-hidden
-                  "
+                  className="bg-[#0c1220] border border-white/10 rounded-xl p-6"
                 >
-
-                  <div
-                    className="
-                      flex
-
-                      items-center
-                      justify-between
-
-                      gap-2
-
-                      mb-3
-                    "
-                  >
-
+                  <div className="flex items-center justify-between mb-3">
                     <div
-                      className={`
-                        w-8
-                        h-8
-
-                        min-[360px]:w-9
-                        min-[360px]:h-9
-
-                        sm:w-11
-                        sm:h-11
-
-                        rounded-full
-
-                        ${bg}
-
-                        flex
-                        items-center
-                        justify-center
-
-                        shrink-0
-                      `}
+                      className={`w-11 h-11 rounded-full ${bg} flex items-center justify-center`}
                     >
-
-                      <Icon
-                        size={
-                          window.innerWidth <
-                          480
-                            ? 17
-                            : 20
-                        }
-                        className={
-                          color
-                        }
-                      />
-
+                      <Icon size={20} className={color} />
                     </div>
-
-
                     <span
-                      className={`
-                        text-[10px]
-                        min-[360px]:text-[11px]
-                        sm:text-xs
-
-                        font-semibold
-
-                        whitespace-nowrap
-
-                        ${
-                          positive
-                            ? "text-emerald-400"
-                            : "text-red-400"
-                        }
-                      `}
+                      className={`text-xs font-semibold ${
+                        positive ? "text-emerald-400" : "text-red-400"
+                      }`}
                     >
-
-                      {positive
-                        ? "↑"
-                        : "↓"}{" "}
-
-                      {change}
-
+                      {positive ? "↑" : "↓"} {change}
                     </span>
-
                   </div>
 
+                  <p className="text-sm text-gray-400 mb-1">{label}</p>
 
-                  <p
-                    className="
-                      text-[11px]
-                      min-[360px]:text-xs
-                      sm:text-sm
-
-                      text-gray-400
-
-                      mb-1
-
-                      truncate
-                    "
-                  >
-                    {label}
-                  </p>
-
-
-                  <p
-                    className="
-                      text-xl
-                      min-[360px]:text-2xl
-                      sm:text-3xl
-
-                      font-bold
-
-                      truncate
-                    "
-                  >
-                    {value}
-                  </p>
-
+                  <div className="flex items-end justify-between">
+                    <p className="text-3xl font-bold">{value}</p>
+                    <p className="text-[11px] text-gray-600 mb-1">
+                      vs last week
+                    </p>
+                  </div>
                 </div>
-
               )
             )}
-
           </div>
 
-
-          {/* =================================================
-              CHARTS
-          ================================================= */}
-
-          <div
-            className="
-              grid
-
-              grid-cols-1
-
-              lg:grid-cols-3
-
-              gap-3
-              sm:gap-4
-
-              min-w-0
-            "
-          >
-
-            {/* =================================================
-                INCIDENTS OVER TIME
-            ================================================= */}
-
-            <div
-              className="
-                lg:col-span-2
-
-                bg-[#0c1220]
-
-                border
-                border-white/10
-
-                rounded-xl
-
-                p-3
-                sm:p-4
-
-                min-w-0
-
-                overflow-hidden
-              "
-            >
-
-              <div
-                className="
-                  flex
-
-                  items-center
-                  justify-between
-
-                  gap-2
-
-                  mb-3
-                "
-              >
-
-                <h2
-                  className="
-                    font-semibold
-
-                    text-xs
-                    sm:text-sm
-
-                    truncate
-                  "
-                >
-                  Incidents Over Time
-                </h2>
-
-              </div>
-
-
-              {lineData.length ===
-              0 ? (
-
-                <div
-                  className="
-                    h-[170px]
-                    min-[360px]:h-[180px]
-                    sm:h-[210px]
-
-                    flex
-                    items-center
-                    justify-center
-
-                    text-xs
-                    sm:text-sm
-
-                    text-gray-600
-
-                    text-center
-
-                    px-4
-                  "
-                >
-                  No trend data available.
-                </div>
-
-              ) : (
-
-                <div
-                  className="
-                    w-full
-
-                    min-w-0
-
-                    h-[170px]
-                    min-[360px]:h-[180px]
-                    sm:h-[210px]
-                    md:h-[230px]
-                  "
-                >
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-
-                    <LineChart
-                      data={
-                        lineData
-                      }
-                      margin={{
-                        top: 5,
-                        right:
-                          window.innerWidth <
-                          480
-                            ? 0
-                            : 5,
-                        left:
-                          window.innerWidth <
-                          480
-                            ? -18
-                            : -10,
-                        bottom: 0,
-                      }}
-                    >
-
-                      <CartesianGrid
-                        stroke="#1a2233"
-                        strokeDasharray="3 3"
-                      />
-
-                      <XAxis
-                        dataKey="hour"
-                        stroke="#6b7280"
-
-                        fontSize={
-                          window.innerWidth <
-                          480
-                            ? 8
-                            : 9
-                        }
-
-                        interval={
-                          window.innerWidth <
-                          480
-                            ? "preserveStartEnd"
-                            : 2
-                        }
-
-                        tickLine={false}
-                        axisLine={false}
-                      />
-
-                      <YAxis
-                        stroke="#6b7280"
-                        fontSize={9}
-
-                        allowDecimals={
-                          false
-                        }
-
-                        width={
-                          window.innerWidth <
-                          480
-                            ? 28
-                            : 35
-                        }
-
-                        tickLine={false}
-                        axisLine={false}
-                      />
-
-                      <Tooltip
-                        contentStyle={{
-                          background:
-                            "#0c1220",
-                          border:
-                            "1px solid #1a2233",
-                          fontSize: 12,
-                          borderRadius: 8,
-                        }}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="count"
-                        stroke="#34e08a"
-                        strokeWidth={2}
-
-                        dot={{
-                          r:
-                            window.innerWidth <
-                            480
-                              ? 2
-                              : 2.5,
-                        }}
-
-                        activeDot={{
-                          r: 4,
-                        }}
-                      />
-
-                    </LineChart>
-
-                  </ResponsiveContainer>
-
-                </div>
-
-              )}
-
+          {/* ================= CHARTS ================= */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* INCIDENTS OVER TIME */}
+            <div className="col-span-2 bg-[#0c1220] border border-white/10 rounded-xl p-4">
+              <h2 className="font-semibold text-sm mb-2">
+                Incidents Over Time
+              </h2>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={lineData}>
+                  <CartesianGrid
+                    stroke="#1a2233"
+                    strokeDasharray="3 3"
+                  />
+                  <XAxis
+                    dataKey="hour"
+                    stroke="#6b7280"
+                    fontSize={11}
+                    interval={2}
+                  />
+                  <YAxis
+                    stroke="#6b7280"
+                    fontSize={11}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0c1220",
+                      border: "1px solid #1a2233",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#34e08a"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
 
-
-            {/* =================================================
-                TOP ATTACK TYPES
-            ================================================= */}
-
-            <div
-              className="
-                bg-[#0c1220]
-
-                border
-                border-white/10
-
-                rounded-xl
-
-                p-3
-                sm:p-4
-
-                min-w-0
-
-                overflow-hidden
-              "
-            >
-
-              <h2
-                className="
-                  font-semibold
-
-                  text-xs
-                  sm:text-sm
-
-                  mb-2
-                "
-              >
+            {/* TOP ATTACK TYPES */}
+            <div className="bg-[#0c1220] border border-white/10 rounded-xl p-4">
+              <h2 className="font-semibold text-sm mb-2">
                 Top Attack Types
               </h2>
 
+              <div className="relative flex items-center justify-center h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={attackTypes}
+                      dataKey="value"
+                      innerRadius={38}
+                      outerRadius={55}
+                      paddingAngle={2}
+                    >
+                      {attackTypes.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
 
-              {attackTypes.length ===
-              0 ? (
-
-                <div
-                  className="
-                    h-[230px]
-                    sm:h-[260px]
-
-                    flex
-                    items-center
-                    justify-center
-
-                    text-xs
-                    sm:text-sm
-
-                    text-gray-600
-
-                    text-center
-                  "
-                >
-                  No attack type data available.
+                <div className="absolute text-center">
+                  <p className="text-lg font-bold">{attackTotal}</p>
+                  <p className="text-[10px] text-gray-500">Total</p>
                 </div>
+              </div>
 
-              ) : (
-
-                <>
-
+              <div className="space-y-1.5 mt-3">
+                {attackTypes.map((t) => (
                   <div
-                    className="
-                      relative
-
-                      flex
-                      items-center
-                      justify-center
-
-                      h-32
-                      min-[360px]:h-36
-                      sm:h-40
-
-                      w-full
-                    "
+                    key={t.name}
+                    className="flex items-center justify-between text-xs"
                   >
-
-                    <ResponsiveContainer
-                      width="100%"
-                      height="100%"
-                    >
-
-                      <PieChart>
-
-                        <Pie
-                          data={
-                            attackTypes
-                          }
-
-                          dataKey="value"
-
-                          innerRadius={
-                            window.innerWidth <
-                            480
-                              ? 30
-                              : 34
-                          }
-
-                          outerRadius={
-                            window.innerWidth <
-                            480
-                              ? 47
-                              : 52
-                          }
-
-                          paddingAngle={2}
-                        >
-
-                          {attackTypes.map(
-                            (entry) => (
-
-                              <Cell
-                                key={
-                                  entry.name
-                                }
-                                fill={
-                                  entry.color
-                                }
-                              />
-
-                            )
-                          )}
-
-                        </Pie>
-
-                      </PieChart>
-
-                    </ResponsiveContainer>
-
-
-                    <div
-                      className="
-                        absolute
-
-                        text-center
-
-                        pointer-events-none
-                      "
-                    >
-
-                      <p
-                        className="
-                          text-base
-                          sm:text-lg
-
-                          font-bold
-                        "
-                      >
-                        {attackTotal}
-                      </p>
-
-                      <p
-                        className="
-                          text-[9px]
-                          sm:text-[10px]
-
-                          text-gray-500
-                        "
-                      >
-                        Total
-                      </p>
-
-                    </div>
-
+                    <span className="flex items-center gap-2 text-gray-400">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: t.color }}
+                      />
+                      {t.name}
+                    </span>
+                    <span className="text-gray-300">
+                      {t.value} ({t.percent}%)
+                    </span>
                   </div>
-
-
-                  <div
-                    className="
-                      space-y-2
-
-                      mt-3
-                    "
-                  >
-
-                    {attackTypes.map(
-                      (item) => (
-
-                        <div
-                          key={
-                            item.name
-                          }
-                          className="
-                            flex
-
-                            items-center
-                            justify-between
-
-                            gap-2
-
-                            text-[11px]
-                            sm:text-xs
-                          "
-                        >
-
-                          <span
-                            className="
-                              flex
-                              items-center
-
-                              gap-2
-
-                              text-gray-400
-
-                              min-w-0
-                            "
-                          >
-
-                            <span
-                              className="
-                                w-2
-                                h-2
-
-                                rounded-full
-
-                                shrink-0
-                              "
-                              style={{
-                                background:
-                                  item.color,
-                              }}
-                            />
-
-                            <span
-                              className="
-                                truncate
-                              "
-                            >
-                              {
-                                item.name
-                              }
-                            </span>
-
-                          </span>
-
-
-                          <span
-                            className="
-                              text-gray-300
-
-                              whitespace-nowrap
-
-                              shrink-0
-                            "
-                          >
-
-                            {
-                              item.value
-                            }{" "}
-
-                            (
-                            {
-                              item.percent
-                            }%)
-
-                          </span>
-
-                        </div>
-
-                      )
-                    )}
-
-                  </div>
-
-                </>
-
-              )}
-
+                ))}
+              </div>
             </div>
-
           </div>
 
-
-          {/* =================================================
-              INCIDENTS TABLE
-          ================================================= */}
-
-          <div
-            className="
-              bg-[#0c1220]
-
-              border
-              border-white/10
-
-              rounded-xl
-
-              p-3
-              sm:p-5
-
-              min-w-0
-
-              overflow-hidden
-            "
-          >
-
-            <div
-              className="
-                flex
-
-                flex-col
-                sm:flex-row
-
-                sm:items-center
-                sm:justify-between
-
-                gap-2
-
-                mb-4
-              "
-            >
-
-              <h2
-                className="
-                  font-semibold
-                  text-sm
-                "
-              >
-                Incidents
-              </h2>
-
-
+          {/* ================= INCIDENTS TABLE ================= */}
+          <div className="bg-[#0c1220] border border-white/10 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-sm">Incidents</h2>
               <Link
                 to="/incidents"
-                className="
-                  text-xs
-                  text-emerald-400
-
-                  hover:underline
-
-                  w-fit
-                "
+                className="text-xs text-emerald-400 hover:underline"
               >
                 View all incidents
               </Link>
-
             </div>
 
-
-            {sortedIncidents.length ===
-            0 ? (
-
-              <div
-                className="
-                  py-10
-
-                  text-center
-
-                  text-sm
-
-                  text-gray-600
-                "
-              >
-                No incidents available.
-              </div>
-
-            ) : (
-
-              <div
-                className="
-                  overflow-x-auto
-
-                  -mx-3
-                  px-3
-
-                  sm:mx-0
-                  sm:px-0
-
-                  overscroll-x-contain
-                "
-              >
-
-                <table
-                  className="
-                    w-full
-
-                    text-xs
-                    sm:text-sm
-
-                    min-w-[640px]
-                  "
-                >
-
-                  <thead>
-
-                    <tr
-                      className="
-                        text-left
-
-                        text-gray-500
-
-                        text-[10px]
-                        sm:text-xs
-
-                        border-b
-                        border-white/10
-                      "
-                    >
-
-                      <th
-                        className="
-                          pb-2
-                          pr-4
-
-                          font-normal
-                        "
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 text-xs border-b border-white/10">
+                  <th className="pb-2 font-normal">ID</th>
+                  <th className="pb-2 font-normal">Title</th>
+                  <th className="pb-2 font-normal">Severity</th>
+                  <th className="pb-2 font-normal">Analysis</th>
+                  <th className="pb-2 font-normal">Source</th>
+                  <th className="pb-2 font-normal">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedIncidents.map((inc) => (
+                  <tr key={inc.id} className="border-b border-white/5">
+                    <td className="py-2.5 text-gray-300">{inc.id}</td>
+                    <td className="py-2.5">{inc.title}</td>
+                    <td className="py-2.5">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                          severityStyle[inc.severity] || severityStyle.Low
+                        }`}
                       >
-                        ID
-                      </th>
-
-                      <th
-                        className="
-                          pb-2
-                          pr-4
-
-                          font-normal
-                        "
-                      >
-                        Title
-                      </th>
-
-                      <th
-                        className="
-                          pb-2
-                          pr-4
-
-                          font-normal
-                        "
-                      >
-                        Severity
-                      </th>
-
-                      <th
-                        className="
-                          pb-2
-                          pr-4
-
-                          font-normal
-                        "
-                      >
-                        Analysis
-                      </th>
-
-                      <th
-                        className="
-                          pb-2
-                          pr-4
-
-                          font-normal
-                        "
-                      >
-                        Source
-                      </th>
-
-                      <th
-                        className="
-                          pb-2
-
-                          font-normal
-                        "
-                      >
-                        Time
-                      </th>
-
-                    </tr>
-
-                  </thead>
-
-
-                  <tbody>
-
-                    {sortedIncidents.map(
-                      (incident) => (
-
-                        <tr
-                          key={
-                            incident.id
-                          }
-                          className="
-                            border-b
-                            border-white/5
-                          "
-                        >
-
-                          <td
-                            className="
-                              py-3
-                              pr-4
-
-                              text-gray-300
-
-                              whitespace-nowrap
-                            "
-                          >
-                            {
-                              incident.id
-                            }
-                          </td>
-
-
-                          <td
-                            className="
-                              py-3
-                              pr-4
-
-                              max-w-[260px]
-                            "
-                          >
-
-                            <span
-                              className="
-                                block
-
-                                truncate
-                              "
-                              title={
-                                incident.title
-                              }
-                            >
-                              {
-                                incident.title
-                              }
-                            </span>
-
-                          </td>
-
-
-                          <td
-                            className="
-                              py-3
-                              pr-4
-
-                              whitespace-nowrap
-                            "
-                          >
-
-                            <span
-                              className={`
-                                text-[10px]
-                                sm:text-xs
-
-                                px-2
-                                py-0.5
-
-                                rounded-full
-
-                                border
-
-                                ${
-                                  SEVERITY_STYLE[
-                                    incident.severity
-                                  ] ||
-                                  "bg-gray-500/10 text-gray-400 border-gray-500/30"
-                                }
-                              `}
-                            >
-                              {
-                                incident.severity
-                              }
-                            </span>
-
-                          </td>
-
-
-                          <td
-                            className="
-                              py-3
-                              pr-4
-
-                              whitespace-nowrap
-                            "
-                          >
-
-                            {incident.hasAiResult ? (
-
-                              <span
-                                className="
-                                  text-xs
-                                  text-emerald-400
-                                "
-                              >
-                                Analyzed
-                              </span>
-
-                            ) : (
-
-                              <span
-                                className="
-                                  text-xs
-                                  text-amber-400
-                                "
-                              >
-                                Pending
-                              </span>
-
-                            )}
-
-                          </td>
-
-
-                          <td
-                            className="
-                              py-3
-                              pr-4
-
-                              text-gray-400
-
-                              whitespace-nowrap
-                            "
-                          >
-                            {
-                              incident.source
-                            }
-                          </td>
-
-
-                          <td
-                            className="
-                              py-3
-
-                              text-gray-500
-
-                              whitespace-nowrap
-                            "
-                          >
-                            {
-                              incident.time
-                            }
-                          </td>
-
-                        </tr>
-
-                      )
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            )}
-
+                        {inc.severity}
+                      </span>
+                    </td>
+                    <td className="py-2.5">
+                      {inc.hasAiResult ? (
+                        <span className="text-xs text-emerald-400">
+                          Analyzed
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-400">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-gray-400">{inc.source}</td>
+                    <td className="py-2.5 text-gray-500">{inc.time}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
         </main>
-
       </div>
-
     </div>
   );
 }

@@ -80,7 +80,7 @@ export default function Login() {
         </div>
       )}
 
-      <div className="z-10 w-full max-w-sm bg-[#0c1220] border border-emerald-500/20 rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <div className="z-10 w-full max-w-sm bg-[#0c1220] border border-emerald-500/20 rounded-2xl p-8 shadow-2xl">
         <h1 className="text-xl font-bold mb-6 text-center">Welcome</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">

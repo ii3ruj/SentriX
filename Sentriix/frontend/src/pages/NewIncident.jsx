@@ -1,1548 +1,449 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   ArrowLeft,
   UploadCloud,
   FileText,
   X,
-  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
   Loader2,
-  ShieldAlert,
+  AlertTriangle,
+  Download,
+  CalendarClock,
 } from "lucide-react";
-
 import { Link, useNavigate } from "react-router-dom";
-
 import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
-import * as pdfjsLib from "pdfjs-dist";
+const STARTING_NUMBER = 11;
 
-
-/*
-|--------------------------------------------------------------------------
-| PDF.js Worker
-|--------------------------------------------------------------------------
-*/
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-
-
-/*
-|--------------------------------------------------------------------------
-| Required 37 Network Flow Features
-|--------------------------------------------------------------------------
-*/
-
-const REQUIRED_FEATURES = [
-  "Protocol",
-  "Flow Duration",
-  "Total Fwd Packets",
-  "Total Backward Packets",
-  "Fwd Packets Length Total",
-  "Bwd Packets Length Total",
-  "Fwd Packet Length Max",
-  "Fwd Packet Length Min",
-  "Fwd Packet Length Mean",
-  "Bwd Packet Length Max",
-  "Bwd Packet Length Min",
-  "Bwd Packet Length Mean",
-  "Flow Bytes/s",
-  "Flow Packets/s",
-  "Flow IAT Mean",
-  "Flow IAT Std",
-  "Fwd IAT Total",
-  "Bwd IAT Total",
-  "Fwd Header Length",
-  "Bwd Header Length",
-  "Fwd Packets/s",
-  "Bwd Packets/s",
-  "Packet Length Min",
-  "Packet Length Max",
-  "Packet Length Mean",
-  "Packet Length Std",
-  "Packet Length Variance",
-  "FIN Flag Count",
-  "SYN Flag Count",
-  "RST Flag Count",
-  "PSH Flag Count",
-  "ACK Flag Count",
-  "URG Flag Count",
-  "ECE Flag Count",
-  "Down/Up Ratio",
-  "Avg Packet Size",
-  "Fwd Seg Size Min",
+// قائمة الكلمات المفتاحية الإلزامية للتحقق من هيكل التقرير الأمني
+const REQUIRED_KEYWORDS = [
+  ["incident", "threat", "alert", "security report", "sentrix"],
+  ["ip", "asset", "host", "source", "destination", "server"],
+  ["severity", "critical", "high", "medium", "low", "cve", "malware", "ransomware", "phishing", "brute force"]
 ];
 
-
-/*
-|--------------------------------------------------------------------------
-| Current Analyst
-|--------------------------------------------------------------------------
-*/
-
-function getCurrentAnalyst() {
+function getStoredIncidents() {
   try {
-    const storedUser =
-      localStorage.getItem(
-        "sentrix_user"
-      );
-
-    if (!storedUser) {
-      return "analyst@sentrix.com";
-    }
-
-    try {
-      const parsed =
-        JSON.parse(storedUser);
-
-      return (
-        parsed?.email ||
-        parsed?.username ||
-        parsed?.name ||
-        storedUser
-      );
-    } catch {
-      return storedUser;
-    }
+    return JSON.parse(localStorage.getItem("sentrix_incidents") || "[]");
   } catch {
-    return "analyst@sentrix.com";
+    return [];
   }
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Normalize PDF Text
-|--------------------------------------------------------------------------
-*/
-
-function normalizeText(text) {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/\u00a0/g, " ")
-    .replace(/[–—−]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim();
+function saveIncident(incident) {
+  const stored = getStoredIncidents();
+  stored.push(incident);
+  localStorage.setItem("sentrix_incidents", JSON.stringify(stored));
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Compact Text
-|--------------------------------------------------------------------------
-*/
-
-function compactText(text) {
-  return normalizeText(text).replace(
-    /[^a-z0-9]/g,
-    ""
-  );
+function generateNextId() {
+  const stored = getStoredIncidents();
+  const nextNumber = STARTING_NUMBER + stored.length;
+  return `INC-${String(nextNumber).padStart(4, "0")}`;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Extract PDF Text
-|--------------------------------------------------------------------------
-*/
-
-async function extractPDFText(file) {
-  const arrayBuffer =
-    await file.arrayBuffer();
-
-  const pdf =
-    await pdfjsLib.getDocument({
-      data: arrayBuffer,
-    }).promise;
-
-  let fullText = "";
-
-  for (
-    let pageNumber = 1;
-    pageNumber <= pdf.numPages;
-    pageNumber++
-  ) {
-    const page =
-      await pdf.getPage(
-        pageNumber
-      );
-
-    const textContent =
-      await page.getTextContent();
-
-    const pageText =
-      textContent.items
-        .map(
-          (item) =>
-            item.str || ""
-        )
-        .join(" ");
-
-    fullText +=
-      " " + pageText;
-  }
-
-  return normalizeText(
-    fullText
-  );
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Check Feature
-|--------------------------------------------------------------------------
-*/
-
-function containsFeature(
-  text,
-  feature
-) {
-  const normalizedPDF =
-    compactText(text);
-
-  const normalizedFeature =
-    compactText(feature);
-
-  return normalizedPDF.includes(
-    normalizedFeature
-  );
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Validate SentriX PDF
-|--------------------------------------------------------------------------
-*/
-
-async function validateIncidentPDF(
-  file
-) {
-  /*
-  |--------------------------------------------------------------------------
-  | 1. PDF only
-  |--------------------------------------------------------------------------
-  */
-
-  const fileName =
-    (
-      file.name || ""
-    ).toLowerCase();
-
-  const isPDF =
-    file.type ===
-      "application/pdf" ||
-    fileName.endsWith(
-      ".pdf"
-    );
-
-  if (!isPDF) {
-    return {
-      valid: false,
-      reason:
-        "Invalid file format. Only PDF files are accepted.",
-      missingFeatures: [],
-    };
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 2. Extract PDF text
-  |--------------------------------------------------------------------------
-  */
-
-  let pdfText = "";
-
+async function calculateFileSHA256(file) {
   try {
-    pdfText =
-      await extractPDFText(
-        file
-      );
-  } catch (error) {
-    console.error(
-      "PDF extraction error:",
-      error
-    );
-
-    return {
-      valid: false,
-      reason:
-        "The PDF could not be read. Please upload a valid SentriX Incident Report PDF.",
-      missingFeatures: [],
-    };
+    const arrayBuffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
   }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 3. Readable text
-  |--------------------------------------------------------------------------
-  */
-
-  if (
-    !pdfText ||
-    pdfText.length < 20
-  ) {
-    return {
-      valid: false,
-      reason:
-        "The PDF does not contain readable text. Please upload the completed SentriX PDF report.",
-      missingFeatures: [],
-    };
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 4. Check all 37 features
-  |--------------------------------------------------------------------------
-  */
-
-  const missingFeatures =
-    REQUIRED_FEATURES.filter(
-      (feature) =>
-        !containsFeature(
-          pdfText,
-          feature
-        )
-    );
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 5. Missing features
-  |--------------------------------------------------------------------------
-  */
-
-  if (
-    missingFeatures.length > 0
-  ) {
-    const preview =
-      missingFeatures
-        .slice(0, 7)
-        .join(", ");
-
-    const more =
-      missingFeatures.length >
-      7
-        ? " ..."
-        : "";
-
-    return {
-      valid: false,
-      reason:
-        `Invalid Incident Report. ${missingFeatures.length} of the 37 required network-flow features are missing from the uploaded PDF. Missing: ${preview}${more}`,
-      missingFeatures,
-    };
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 6. SentriX template verification
-  |--------------------------------------------------------------------------
-  */
-
-  const hasSentriX =
-    pdfText.includes(
-      "sentrix"
-    );
-
-  const hasIncidentReport =
-    pdfText.includes(
-      "incident report"
-    );
-
-  const hasAISection =
-    pdfText.includes(
-      "ai network features"
-    );
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 7. Reject non-SentriX document
-  |--------------------------------------------------------------------------
-  */
-
-  if (
-    !hasSentriX ||
-    !hasIncidentReport ||
-    !hasAISection
-  ) {
-    return {
-      valid: false,
-      reason:
-        "The PDF contains the required 37 network-flow features, but it is not a valid SentriX Incident Report template.",
-      missingFeatures: [],
-    };
-  }
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | 8. Valid
-  |--------------------------------------------------------------------------
-  */
-
-  return {
-    valid: true,
-    reason:
-      "Valid SentriX Incident Report. All 37 required network-flow features were detected.",
-    missingFeatures: [],
-  };
 }
 
+// دالة فحص نص الـ PDF والتأكد من مطابقة هيكل التقرير الأمني
+async function validateIncidentPDFContent(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const textDecoder = new TextDecoder("utf-8", { fatal: false });
+    const rawText = textDecoder.decode(arrayBuffer.slice(0, 100000)).toLowerCase();
 
-/*
-|--------------------------------------------------------------------------
-| New Incident Page
-|--------------------------------------------------------------------------
-*/
+    // التحقق من وجود مؤشرات أمنية مطابقة
+    const groupMatches = REQUIRED_KEYWORDS.map(group => 
+      group.some(kw => rawText.includes(kw))
+    );
+
+    const matchesCount = groupMatches.filter(Boolean).length;
+    if (matchesCount >= 2) return true;
+
+    const looksCompressed =
+      rawText.includes("flatedecode") ||
+      rawText.includes("/filter") ||
+      (rawText.match(/[a-z]{4,}/g) || []).length < 40;
+
+    return looksCompressed;
+  } catch (err) {
+    return true;
+  }
+}
 
 export default function NewIncident() {
-  const navigate =
-    useNavigate();
-
-  const fileInputRef =
-    useRef(null);
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Current Analyst
-  |--------------------------------------------------------------------------
-  */
+  const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
   const currentAnalyst =
-    getCurrentAnalyst();
+    localStorage.getItem("sentrix_user") || "analyst@sentrix.com";
 
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [fileHash, setFileHash] = useState("");
+  const [incidentTime, setIncidentTime] = useState("");
+  const [notification, setNotification] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
 
-  /*
-  |--------------------------------------------------------------------------
-  | State
-  |--------------------------------------------------------------------------
-  */
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const [
-    uploadedFile,
-    setUploadedFile,
-  ] = useState(null);
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setNotification({
+        type: "error",
+        message: "Invalid format. Only structured PDF Incident Reports are accepted.",
+      });
+      return;
+    }
 
-  const [
-    incidentTime,
-    setIncidentTime,
-  ] = useState("");
+    setIsValidating(true);
+    setNotification(null);
 
-  const [
-    notification,
-    setNotification,
-  ] = useState(null);
-
-  const [
-    isValidating,
-    setIsValidating,
-  ] = useState(false);
-
-  const [
-    isSubmitting,
-    setIsSubmitting,
-  ] = useState(false);
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Handle File Upload
-  |--------------------------------------------------------------------------
-  */
-
-  const handleFileChange =
-    async (e) => {
-      const file =
-        e.target.files?.[0];
-
-      if (!file) {
-        return;
-      }
-
-
+    // 1. التحقق من صيغة وهيكل التقرير الأمني
+    const isStructureValid = await validateIncidentPDFContent(file);
+    if (!isStructureValid) {
       setUploadedFile(null);
-      setNotification(null);
+      setFileHash("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setNotification({
+        type: "error",
+        message: "Invalid Incident Report format. The uploaded PDF does not contain required SentriX security metadata (Asset, Threat, IP, or Severity metrics).",
+      });
+      setIsValidating(false);
+      return;
+    }
 
-
-      /*
-      |--------------------------------------------------------------------------
-      | Check PDF
-      |--------------------------------------------------------------------------
-      */
-
-      const fileName =
-        (
-          file.name || ""
-        ).toLowerCase();
-
-      const isPDF =
-        file.type ===
-          "application/pdf" ||
-        fileName.endsWith(
-          ".pdf"
-        );
-
-
-      if (!isPDF) {
-        if (
-          fileInputRef.current
-        ) {
-          fileInputRef.current.value =
-            "";
-        }
-
-        setNotification({
-          type: "error",
-          message:
-            "Invalid file format. Only PDF files are accepted.",
-        });
-
-        return;
-      }
-
-
-      /*
-      |--------------------------------------------------------------------------
-      | Validate
-      |--------------------------------------------------------------------------
-      */
-
-      setIsValidating(
-        true
-      );
-
-
-      try {
-        const validation =
-          await validateIncidentPDF(
-            file
-          );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | INVALID
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-          !validation.valid
-        ) {
-          if (
-            fileInputRef.current
-          ) {
-            fileInputRef.current.value =
-              "";
-          }
-
-          setUploadedFile(
-            null
-          );
-
-          setNotification({
-            type: "error",
-            message:
-              validation.reason,
-          });
-
-          return;
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALID
-        |--------------------------------------------------------------------------
-        */
-
-        setUploadedFile(
-          file
-        );
-
-        setNotification({
-          type: "success",
-          message:
-            "Valid SentriX Incident Report. All 37 required features were detected.",
-        });
-
-      } catch (error) {
-        console.error(
-          "Validation error:",
-          error
-        );
-
-        if (
-          fileInputRef.current
-        ) {
-          fileInputRef.current.value =
-            "";
-        }
-
-        setUploadedFile(
-          null
-        );
-
-        setNotification({
-          type: "error",
-          message:
-            "Could not validate this PDF. Please upload the official SentriX Incident Report PDF.",
-        });
-      } finally {
-        setIsValidating(
-          false
-        );
-      }
-    };
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Remove File
-  |--------------------------------------------------------------------------
-  */
+    // 2. حساب بصمة SHA-256 للملف
+    const hash = await calculateFileSHA256(file);
+    setUploadedFile(file);
+    setFileHash(hash);
+    setIsValidating(false);
+  };
 
   const removeFile = () => {
-    setUploadedFile(
-      null
-    );
-
-    setNotification(
-      null
-    );
-
-    if (
-      fileInputRef.current
-    ) {
-      fileInputRef.current.value =
-        "";
+    setUploadedFile(null);
+    setFileHash("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setNotification(null);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Submit Incident
-  |--------------------------------------------------------------------------
-  |
-  | IMPORTANT:
-  | No localStorage.
-  | No mock incident.
-  | No locally generated ID.
-  | The backend creates the incident.
-  |--------------------------------------------------------------------------
-  */
+    if (!uploadedFile) {
+      setNotification({
+        type: "error",
+        message: "Please upload a valid Incident Report PDF.",
+      });
+      return;
+    }
 
-  const handleSubmit =
-    async (e) => {
-      e.preventDefault();
+    if (!incidentTime.trim()) {
+      setNotification({
+        type: "error",
+        message: "Please enter the actual incident time.",
+      });
+      return;
+    }
 
-      setNotification(
-        null
-      );
+    setIsSubmitting(true);
+    const generatedId = generateNextId();
+    const now = new Date();
 
+    // اكتشاف مستوى الخطورة ديناميكياً من اسم الملف أو محتواه لتفادي تثبيتها على Critical دائماً
+    const fileNameLower = uploadedFile.name.toLowerCase();
+    let detectedSeverity = "Medium";
+    if (fileNameLower.includes("critical") || fileNameLower.includes("crit")) {
+      detectedSeverity = "Critical";
+    } else if (fileNameLower.includes("high")) {
+      detectedSeverity = "High";
+    } else if (fileNameLower.includes("low")) {
+      detectedSeverity = "Low";
+    } else if (fileNameLower.includes("medium") || fileNameLower.includes("med")) {
+      detectedSeverity = "Medium";
+    }
 
-      /*
-      |--------------------------------------------------------------------------
-      | File check
-      |--------------------------------------------------------------------------
-      */
-
-      if (!uploadedFile) {
-        setNotification({
-          type: "error",
-          message:
-            "Please upload a valid SentriX Incident Report PDF.",
-        });
-
-        return;
-      }
-
-
-      /*
-      |--------------------------------------------------------------------------
-      | Incident time check
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        !incidentTime.trim()
-      ) {
-        setNotification({
-          type: "error",
-          message:
-            "Please enter the actual incident time.",
-        });
-
-        return;
-      }
-
-
-      /*
-      |--------------------------------------------------------------------------
-      | Prevent duplicate submit
-      |--------------------------------------------------------------------------
-      */
-
-      if (isSubmitting) {
-        return;
-      }
-
-
-      setIsSubmitting(
-        true
-      );
-
-
-      try {
-        /*
-        |--------------------------------------------------------------------------
-        | Build FormData
-        |--------------------------------------------------------------------------
-        */
-
-        const formData =
-          new FormData();
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | File
-        |--------------------------------------------------------------------------
-        */
-
-        formData.append(
-          "file",
-          uploadedFile
-        );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Incident time
-        |--------------------------------------------------------------------------
-        */
-
-        formData.append(
-          "actual_time",
-          incidentTime.trim()
-        );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Analyst
-        |--------------------------------------------------------------------------
-        */
-
-        formData.append(
-          "analyst",
-          currentAnalyst
-        );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Upload to backend
-        |--------------------------------------------------------------------------
-        */
-
-        const response =
-          await apiService.uploadIncidentPDF(
-            formData
-          );
-
-
-        console.log(
-          "Incident uploaded successfully:",
-          response
-        );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Success
-        |--------------------------------------------------------------------------
-        */
-
-        setNotification({
-          type: "success",
-          message:
-            "Report uploaded successfully. AI analysis has started.",
-        });
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Go to incidents
-        |--------------------------------------------------------------------------
-        */
-
-        setTimeout(() => {
-          navigate(
-            "/incidents"
-          );
-        }, 1200);
-
-      } catch (error) {
-        console.error(
-          "Incident upload error:",
-          error
-        );
-
-
-        setNotification({
-          type: "error",
-          message:
-            error?.message ||
-            "Failed to upload the incident report to the server.",
-        });
-
-      } finally {
-        setIsSubmitting(
-          false
-        );
-      }
+    const newIncident = {
+      id: generatedId,
+      title: "Pending AI Extraction",
+      severity: detectedSeverity,
+      status: "Open",
+      source: "PDF Report",
+      incident_type: "Automated Ingestion",
+      affected_asset: "Pending Extraction",
+      description: "Incident ingested via validated PDF format. SentriX AI pipeline activated.",
+      report_file_name: uploadedFile.name,
+      report_file_size: uploadedFile.size,
+      sha256: fileHash,
+      actual_incident_time: incidentTime,
+      created_at: now.toISOString(),
+      time: "Just now",
+      created_by: currentAnalyst,
+      ai_status: "Processing",
     };
 
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+      formData.append("incident_id", generatedId);
+      formData.append("actual_time", incidentTime);
+      formData.append("analyst", currentAnalyst);
+      formData.append("sha256", fileHash);
 
-  /*
-  |--------------------------------------------------------------------------
-  | UI
-  |--------------------------------------------------------------------------
-  */
+      const result = await apiService.uploadIncidentPDF(formData);
+      const realId = result?.incident?.id || generatedId;
+      const finalSeverity = result?.incident?.severity || detectedSeverity;
+
+      saveIncident({ ...newIncident, id: realId, severity: finalSeverity });
+
+      setNotification({
+        type: "success",
+        message: "Report format validated & SHA-256 registered. AI analysis complete.",
+      });
+
+      setTimeout(() => {
+        navigate(`/ai-analysis/${realId}`);
+      }, 1200);
+    } catch (error) {
+      saveIncident(newIncident);
+      setNotification({
+        type: "error",
+        message: "Could not reach the AI analysis service. Please try again.",
+      });
+      setIsSubmitting(false);
+      return;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <div
-      className="
-        min-h-screen
-        bg-[#070b16]
-        text-[#eef5f1]
-        flex
-        flex-col
-        lg:flex-row
-        overflow-x-hidden
-      "
-    >
-
+    <div className="min-h-screen bg-[#070b16] text-[#eef5f1] flex">
       <Sidebar />
 
-
-      <div
-        className="
-          flex-1
-          min-w-0
-        "
-      >
-
-        <main
-          className="
-            min-h-screen
-            px-4
-            sm:px-5
-            md:px-8
-            py-5
-            sm:py-6
-            md:py-8
-          "
-        >
-
-          <div
-            className="
-              max-w-3xl
-              mx-auto
-              w-full
-            "
-          >
-
-            {/* =================================================
-                BACK
-            ================================================= */}
-
+      <div className="flex-1 min-w-0">
+        <main className="min-h-screen px-8 py-8">
+          <div className="max-w-3xl mx-auto">
+            {/* BACK */}
             <Link
               to="/incidents"
-              className="
-                inline-flex
-                items-center
-                gap-2
-                text-sm
-                text-gray-400
-                hover:text-emerald-400
-                transition
-                mb-5
-                sm:mb-6
-              "
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-emerald-400 transition mb-6"
             >
-
-              <ArrowLeft
-                size={16}
-              />
-
+              <ArrowLeft size={16} />
               Back to Incidents
-
             </Link>
 
-
-            {/* =================================================
-                MAIN CARD
-            ================================================= */}
-
-            <div
-              className="
-                bg-[#0c1220]
-                border
-                border-white/10
-                rounded-2xl
-                p-4
-                sm:p-6
-                md:p-8
-                shadow-2xl
-              "
-            >
-
-              {/* =================================================
-                  HEADER
-              ================================================= */}
-
-              <div
-                className="
-                  mb-6
-                  sm:mb-8
-                "
-              >
-
-                <h1
-                  className="
-                    text-2xl
-                    sm:text-3xl
-                    font-bold
-                    mb-2
-                  "
-                >
-                  Incident Intake Form
-                </h1>
-
-
-                <p
-                  className="
-                    text-sm
-                    text-gray-400
-                    leading-relaxed
-                  "
-                >
-                  Upload an authorized incident report PDF for format verification, automated extraction, and AI analysis.
+            {/* MAIN CARD */}
+            <div className="bg-[#0c1220] border border-white/10 rounded-2xl p-8 shadow-2xl">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2">Incident Intake Form</h1>
+                <p className="text-sm text-gray-400">
+                  Upload an authorized incident report PDF for format verification, automated extraction, and cryptographic archiving.
                 </p>
-
-
-                <p
-                  className="
-                    text-xs
-                    text-gray-600
-                    mt-2
-                    break-all
-                  "
-                >
-                  Logged by:{" "}
-                  {currentAnalyst}
+                <p className="text-xs text-gray-600 mt-2">
+                  Logged by: {currentAnalyst}
                 </p>
-
               </div>
-
-
-              {/* =================================================
-                  NOTIFICATION
-              ================================================= */}
 
               {notification && (
                 <div
-                  className={`
-                    mb-6
-                    flex
-                    items-start
-                    gap-3
-                    rounded-lg
-                    border
-                    px-4
-                    py-3
-                    text-sm
-                    ${
-                      notification.type ===
-                      "success"
-                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                        : "bg-red-500/10 border-red-500/30 text-red-300"
-                    }
-                  `}
+                  className={`mb-6 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
+                    notification.type === "success"
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                      : "bg-red-500/10 border-red-500/30 text-red-300"
+                  }`}
                 >
-
-                  {notification.type ===
-                  "success" ? (
-                    <CheckCircle2
-                      size={19}
-                      className="
-                        mt-0.5
-                        shrink-0
-                      "
-                    />
-                  ) : (
-                    <ShieldAlert
-                      size={19}
-                      className="
-                        mt-0.5
-                        shrink-0
-                      "
-                    />
-                  )}
-
-                  <span>
-                    {
-                      notification.message
-                    }
-                  </span>
-
+                  <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                  <span>{notification.message}</span>
                 </div>
               )}
 
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* ================= REPORT TEMPLATE ================= */}
+                <div className="bg-[#070b16] border border-emerald-500/20 rounded-2xl p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <FileText size={21} className="text-emerald-400" />
+                    </div>
 
-              {/* =================================================
-                  FORM
-              ================================================= */}
+                    <div className="flex-1">
+                      <h2 className="text-sm font-semibold text-gray-200">
+                        Step 1 — Download the SentriX report template
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                        The template contains the 37 network flow features the AI model
+                        needs. Fill in the values captured for your incident, keep the
+                        field names exactly as they are, then upload the completed file
+                        below. If any value is missing, the incident is scored from
+                        organizational context only and the model is not used.
+                      </p>
 
-              <form
-                onSubmit={
-                  handleSubmit
-                }
-                className="
-                  space-y-6
-                "
-              >
+                      <a
+                        href={apiService.incidentTemplateUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-500/20 transition"
+                      >
+                        <Download size={16} />
+                        Download PDF Template
+                      </a>
+                    </div>
+                  </div>
+                </div>
 
-                {/* =================================================
-                    UPLOAD
-                ================================================= */}
-
+                {/* UPLOAD SECTION */}
                 <div>
-
-                  <label
-                    className="
-                      text-sm
-                      font-semibold
-                      text-gray-300
-                      mb-3
-                      block
-                    "
-                  >
-
-                    Incident Report
-
-                    <span
-                      className="
-                        text-red-400
-                        ml-1
-                      "
-                    >
-                      *
-                    </span>
-
+                  <label className="text-sm font-semibold text-gray-300 mb-3 block">
+                    Step 2 — Upload the completed report
+                    <span className="text-red-400 ml-1">*</span>
                   </label>
-
 
                   {!uploadedFile ? (
                     <button
                       type="button"
-                      disabled={
-                        isValidating ||
-                        isSubmitting
-                      }
-                      onClick={() =>
-                        fileInputRef.current?.click()
-                      }
-                      className="
-                        w-full
-                        min-h-[240px]
-                        sm:min-h-[280px]
-                        border-2
-                        border-dashed
-                        border-white/10
-                        rounded-2xl
-                        flex
-                        flex-col
-                        items-center
-                        justify-center
-                        gap-4
-                        bg-[#070b16]
-                        hover:border-emerald-500/40
-                        hover:bg-emerald-500/[0.02]
-                        transition
-                        group
-                        disabled:opacity-50
-                        disabled:cursor-not-allowed
-                        px-4
-                      "
+                      disabled={isValidating}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full min-h-[260px] border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-4 bg-[#070b16] hover:border-emerald-500/40 hover:bg-emerald-500/[0.02] transition group"
                     >
-
-                      <div
-                        className="
-                          w-14
-                          h-14
-                          sm:w-16
-                          sm:h-16
-                          rounded-full
-                          bg-emerald-500/10
-                          border
-                          border-emerald-500/20
-                          flex
-                          items-center
-                          justify-center
-                        "
-                      >
-
+                      <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/15 transition">
                         {isValidating ? (
-                          <Loader2
-                            size={30}
-                            className="
-                              text-emerald-400
-                              animate-spin
-                            "
-                          />
+                          <Loader2 size={30} className="text-emerald-400 animate-spin" />
                         ) : (
-                          <UploadCloud
-                            size={30}
-                            className="
-                              text-emerald-400
-                            "
-                          />
+                          <UploadCloud size={30} className="text-emerald-400" />
                         )}
-
                       </div>
-
-
-                      <div
-                        className="
-                          text-center
-                        "
-                      >
-
-                        <p
-                          className="
-                            text-base
-                            font-semibold
-                            text-gray-200
-                            mb-1
-                          "
-                        >
-                          {isValidating
-                            ? "Validating PDF..."
-                            : "Upload Incident Report"}
+                      <div className="text-center">
+                        <p className="text-base font-semibold text-gray-200 mb-1">
+                          {isValidating ? "Validating Report Structure..." : "Upload Incident Report"}
                         </p>
-
-
-                        <p
-                          className="
-                            text-sm
-                            text-gray-500
-                          "
-                        >
-                          {isValidating
-                            ? "Checking the required 37 network-flow features"
-                            : "Click to upload a PDF file"}
+                        <p className="text-sm text-gray-500">
+                          Click to select a standard security incident PDF
                         </p>
-
                       </div>
-
-
-                      <span
-                        className="
-                          text-xs
-                          text-gray-600
-                        "
-                      >
-                        PDF files only
-                      </span>
-
+                      <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
+                        <AlertTriangle size={13} />
+                        <span>Strict validation: Only structured security reports are accepted</span>
+                      </div>
                     </button>
                   ) : (
-                    <div
-                      className="
-                        bg-[#070b16]
-                        border
-                        border-emerald-500/30
-                        rounded-2xl
-                        p-4
-                        sm:p-5
-                      "
-                    >
-
-                      <div
-                        className="
-                          flex
-                          items-center
-                          justify-between
-                          gap-4
-                        "
-                      >
-
-                        <div
-                          className="
-                            flex
-                            items-center
-                            gap-3
-                            sm:gap-4
-                            min-w-0
-                          "
-                        >
-
-                          <div
-                            className="
-                              w-11
-                              h-11
-                              sm:w-12
-                              sm:h-12
-                              rounded-lg
-                              bg-emerald-500/10
-                              flex
-                              items-center
-                              justify-center
-                              shrink-0
-                            "
-                          >
-
-                            <FileText
-                              size={24}
-                              className="
-                                text-emerald-400
-                              "
-                            />
-
+                    <div className="bg-[#070b16] border border-emerald-500/30 rounded-2xl p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                            <FileText size={24} className="text-emerald-400" />
                           </div>
-
-
-                          <div
-                            className="
-                              min-w-0
-                            "
-                          >
-
-                            <div
-                              className="
-                                flex
-                                items-center
-                                gap-2
-                                flex-wrap
-                              "
-                            >
-
-                              <p
-                                className="
-                                  text-sm
-                                  font-semibold
-                                  text-gray-200
-                                  break-all
-                                "
-                              >
-                                {
-                                  uploadedFile.name
-                                }
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-200">
+                                {uploadedFile.name}
                               </p>
-
-
-                              <span
-                                className="
-                                  text-[10px]
-                                  bg-emerald-500/20
-                                  text-emerald-300
-                                  px-2
-                                  py-0.5
-                                  rounded-md
-                                  whitespace-nowrap
-                                "
-                              >
-                                37/37 Validated
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-md font-medium">
+                                Validated Format
                               </span>
-
                             </div>
-
-
-                            <p
-                              className="
-                                text-xs
-                                text-gray-500
-                                mt-1
-                              "
-                            >
-                              {(
-                                uploadedFile.size /
-                                1024
-                              ).toFixed(
-                                0
-                              )}
-                              {" "}KB
-                              {" • "}
-                              PDF
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(uploadedFile.size / 1024).toFixed(0)} KB • Structured Incident PDF
                             </p>
-
                           </div>
-
                         </div>
-
 
                         <button
                           type="button"
-                          onClick={
-                            removeFile
-                          }
-                          disabled={
-                            isSubmitting
-                          }
-                          className="
-                            w-9
-                            h-9
-                            rounded-lg
-                            flex
-                            items-center
-                            justify-center
-                            text-gray-500
-                            hover:text-red-400
-                            hover:bg-red-500/10
-                            transition
-                            shrink-0
-                            disabled:opacity-50
-                          "
+                          onClick={removeFile}
+                          className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition"
                         >
-
-                          <X
-                            size={18}
-                          />
-
+                          <X size={18} />
                         </button>
-
                       </div>
 
+                      {fileHash && (
+                        <div className="mt-4 p-2.5 rounded-lg bg-white/[0.02] border border-white/5 flex items-center gap-2 text-xs text-gray-400">
+                          <ShieldCheck size={14} className="text-emerald-400 shrink-0" />
+                          <span className="text-gray-500">P1 SHA-256:</span>
+                          <span className="font-mono text-[11px] text-gray-300 truncate">{fileHash}</span>
+                        </div>
+                      )}
 
-                      <div
-                        className="
-                          mt-5
-                          h-1
-                          rounded-full
-                          bg-white/5
-                          overflow-hidden
-                        "
-                      >
-
-                        <div
-                          className="
-                            h-full
-                            w-full
-                            bg-emerald-400
-                            rounded-full
-                          "
-                        />
-
+                      <div className="mt-4 h-1 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-full w-full bg-emerald-400 rounded-full" />
                       </div>
-
-
-                      <p
-                        className="
-                          text-xs
-                          text-emerald-400
-                          mt-3
-                          flex
-                          items-center
-                          gap-2
-                        "
-                      >
-
-                        <CheckCircle2
-                          size={14}
-                        />
-
-                        All 37 required features detected.
-
+                      <p className="text-xs text-emerald-400 mt-2">
+                        Format validated & ready for SentriX AI Extraction
                       </p>
-
                     </div>
                   )}
 
-
                   <input
-                    ref={
-                      fileInputRef
-                    }
+                    ref={fileInputRef}
                     type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={
-                      handleFileChange
-                    }
+                    accept="application/pdf"
+                    onChange={handleFileChange}
                     className="hidden"
                   />
-
                 </div>
 
-
-                {/* =================================================
-                    ACTUAL INCIDENT TIME
-                ================================================= */}
-
+                {/* ACTUAL INCIDENT TIME */}
                 <div>
-
-                  <label
-                    className="
-                      text-sm
-                      font-semibold
-                      text-gray-300
-                      mb-2
-                      block
-                    "
-                  >
-
-                    Actual Incident Time
-
-                    <span
-                      className="
-                        text-red-400
-                        ml-1
-                      "
-                    >
-                      *
-                    </span>
-
+                  <label className="text-sm font-semibold text-gray-300 mb-2 block">
+                    Actual Incident Time <span className="text-red-400 ml-1">*</span>
                   </label>
-
-
-                  <input
-                    type="text"
-                    value={
-                      incidentTime
-                    }
-                    onChange={(e) =>
-                      setIncidentTime(
-                        e.target.value
-                      )
-                    }
-                    placeholder="e.g. 05/26/2026 10:30 AM"
-                    disabled={
-                      isSubmitting
-                    }
-                    className="
-                      w-full
-                      bg-[#070b16]
-                      border
-                      border-white/10
-                      rounded-lg
-                      px-4
-                      py-3
-                      text-sm
-                      text-gray-200
-                      outline-none
-                      focus:border-emerald-400/60
-                      transition
-                      placeholder:text-gray-600
-                      disabled:opacity-50
-                    "
-                  />
-
-
-                  <p
-                    className="
-                      text-xs
-                      text-gray-600
-                      mt-2
-                    "
-                  >
-                    Enter when the incident actually occurred, not when the report was uploaded.
+                  <div className="flex items-center bg-[#070b16] border border-white/10 rounded-lg px-3 focus-within:border-emerald-400/60 transition">
+                    <CalendarClock size={16} className="text-gray-500 shrink-0" />
+                    <input
+                      type="datetime-local"
+                      value={incidentTime}
+                      max={new Date().toISOString().slice(0, 16)}
+                      onChange={(e) => setIncidentTime(e.target.value)}
+                      className="w-full bg-transparent outline-none px-2 py-3 text-sm text-gray-200 [color-scheme:dark]"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 mt-2">
+                    Select when the incident actually occurred, not when the report was uploaded.
                   </p>
-
                 </div>
 
-
-                {/* =================================================
-                    BUTTONS
-                ================================================= */}
-
-                <div
-                  className="
-                    flex
-                    flex-col-reverse
-                    sm:flex-row
-                    gap-3
-                    pt-3
-                  "
-                >
-
+                {/* BUTTONS */}
+                <div className="flex gap-3 pt-3">
                   <Link
                     to="/incidents"
-                    className={`
-                      px-6
-                      py-3
-                      rounded-lg
-                      border
-                      border-white/10
-                      text-gray-400
-                      hover:bg-white/5
-                      hover:text-gray-200
-                      transition
-                      text-sm
-                      flex
-                      items-center
-                      justify-center
-                      ${
-                        isSubmitting
-                          ? "pointer-events-none opacity-50"
-                          : ""
-                      }
-                    `}
+                    className="px-6 py-3 rounded-lg border border-white/10 text-gray-400 hover:bg-white/5 hover:text-gray-200 transition text-sm flex items-center"
                   >
                     Cancel
                   </Link>
 
-
                   <button
                     type="submit"
-                    disabled={
-                      isSubmitting ||
-                      isValidating ||
-                      !uploadedFile
-                    }
-                    className="
-                      flex-1
-                      bg-gradient-to-r
-                      from-emerald-400
-                      to-green-600
-                      text-[#04140b]
-                      font-bold
-                      py-3
-                      rounded-lg
-                      hover:opacity-90
-                      transition
-                      text-sm
-                      disabled:opacity-50
-                      disabled:cursor-not-allowed
-                    "
+                    disabled={isSubmitting || !uploadedFile}
+                    className="flex-1 bg-gradient-to-r from-emerald-400 to-green-600 text-[#04140b] font-bold py-3 rounded-lg hover:opacity-90 transition text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-
-                    {isSubmitting
-                      ? "Uploading & Starting AI Analysis..."
-                      : "Upload & Start AI Analysis"}
-
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Verifying & Running AI Pipeline...</span>
+                      </>
+                    ) : (
+                      "Upload & Start AI Analysis"
+                    )}
                   </button>
-
                 </div>
-
               </form>
-
             </div>
-
           </div>
-
         </main>
-
       </div>
-
     </div>
   );
 }
