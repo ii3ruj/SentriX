@@ -1,3 +1,706 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  background: #070b16;
+  color: #eef5f1;
+
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+
+  overflow-x: hidden;
+}
+
+
+/* =========================================================
+   MEDIA
+========================================================= */
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+svg {
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   FLEX / GRID SAFETY
+========================================================= */
+
+main,
+section,
+article,
+header,
+footer,
+div {
+  min-width: 0;
+}
+
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
+}
+
+
+/* =========================================================
+   TABLES
+========================================================= */
+
+.table-responsive {
+  width: 100%;
+  max-width: 100%;
+
+  overflow-x: auto;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+.overflow-x-auto {
+  max-width: 100%;
+
+  overflow-x: auto;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  max-width: 100%;
+}
+
+
+/* =========================================================
+   DESKTOP SIDEBAR
+   1025px AND ABOVE
+========================================================= */
+
+.sentrix-sidebar {
+  position: relative;
+
+  width: 256px;
+  min-width: 256px;
+
+  min-height: 100vh;
+
+  background: #0a101d;
+
+  border-right:
+    1px solid rgba(255, 255, 255, 0.10);
+
+  z-index: 1000;
+
+  display: flex;
+  flex-direction: column;
+
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   MOBILE ELEMENTS
+   HIDDEN BY DEFAULT
+========================================================= */
+
+.sentrix-mobile-bar {
+  display: none;
+}
+
+.sentrix-mobile-menu-button {
+  display: none;
+}
+
+.sentrix-mobile-close {
+  display: none;
+}
+
+.sentrix-mobile-overlay {
+  display: none;
+}
+
+
+/* =========================================================
+   MOBILE BRAND
+========================================================= */
+
+.sentrix-mobile-brand {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.sentrix-mobile-logo {
+  width: 32px;
+  height: 32px;
+
+  object-fit: contain;
+}
+
+
+/* =========================================================
+   TABLET + MOBILE
+   1024px AND BELOW
+========================================================= */
+
+@media (max-width: 1024px) {
+
+  /* -------------------------------------------------------
+     PAGE
+  ------------------------------------------------------- */
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100vw;
+
+    overflow-x: hidden;
+  }
+
+
+  /* -------------------------------------------------------
+     MOBILE/TABLET TOP BAR
+  ------------------------------------------------------- */
+
+  .sentrix-mobile-bar {
+    position: fixed;
+
+    top: 0;
+    left: 0;
+    right: 0;
+
+    width: 100%;
+    height: 64px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    padding:
+      0 16px;
+
+    background:
+      rgba(10, 16, 29, 0.96);
+
+    border-bottom:
+      1px solid rgba(255, 255, 255, 0.08);
+
+    backdrop-filter:
+      blur(12px);
+
+    -webkit-backdrop-filter:
+      blur(12px);
+
+    z-index: 900;
+  }
+
+
+  /* -------------------------------------------------------
+     MENU BUTTON
+  ------------------------------------------------------- */
+
+  .sentrix-mobile-menu-button {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: none;
+
+    border-radius: 10px;
+
+    color: #d1d5db;
+
+    background:
+      rgba(255, 255, 255, 0.04);
+
+    cursor: pointer;
+
+    transition:
+      background 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .sentrix-mobile-menu-button:hover {
+    color: #34d399;
+
+    background:
+      rgba(52, 211, 153, 0.08);
+  }
+
+
+  /* -------------------------------------------------------
+     SIDEBAR DRAWER
+  ------------------------------------------------------- */
+
+  .sentrix-sidebar {
+    position: fixed;
+
+    top: 0;
+    left: 0;
+    bottom: 0;
+
+    width: 280px;
+    min-width: 280px;
+
+    max-width: 85vw;
+
+    min-height: 100vh;
+
+    margin: 0;
+
+    transform:
+      translateX(-105%);
+
+    transition:
+      transform 0.28s ease;
+
+    z-index: 1100;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    box-shadow:
+      12px 0 45px rgba(0, 0, 0, 0.35);
+  }
+
+
+  /* OPEN */
+
+  .sentrix-sidebar.mobile-open {
+    transform:
+      translateX(0);
+  }
+
+
+  /* -------------------------------------------------------
+     CLOSE BUTTON
+  ------------------------------------------------------- */
+
+  .sentrix-mobile-close {
+    width: 36px;
+    height: 36px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    margin-left: auto;
+
+    border: none;
+
+    border-radius: 9px;
+
+    color: #9ca3af;
+
+    background:
+      rgba(255, 255, 255, 0.04);
+
+    cursor: pointer;
+  }
+
+  .sentrix-mobile-close:hover {
+    color: #ffffff;
+
+    background:
+      rgba(255, 255, 255, 0.08);
+  }
+
+
+  /* -------------------------------------------------------
+     OVERLAY
+  ------------------------------------------------------- */
+
+  .sentrix-mobile-overlay {
+    position: fixed;
+
+    inset: 0;
+
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    padding: 0;
+
+    border: none;
+
+    background:
+      rgba(0, 0, 0, 0.58);
+
+    z-index: 1050;
+
+    cursor: pointer;
+  }
+
+
+  /* -------------------------------------------------------
+     IMPORTANT:
+     SIDEBAR DOES NOT TAKE CONTENT WIDTH
+  ------------------------------------------------------- */
+
+  main {
+    width: 100%;
+
+    min-width: 0;
+
+    max-width: 100%;
+
+    margin-left: 0 !important;
+
+    padding-left: 0;
+
+    overflow-x: hidden;
+  }
+
+
+  /* -------------------------------------------------------
+     WIDTH SAFETY
+  ------------------------------------------------------- */
+
+  .w-screen {
+    max-width: 100vw;
+  }
+
+  .max-w-screen-xl,
+  .max-w-screen-2xl {
+    max-width: 100%;
+  }
+
+
+  /* -------------------------------------------------------
+     CONTENT PADDING
+  ------------------------------------------------------- */
+
+  main.p-8 {
+    padding:
+      80px 24px 24px !important;
+  }
+
+  main.px-8 {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+
+
+  /* -------------------------------------------------------
+     COMMON GRIDS
+  ------------------------------------------------------- */
+
+  .grid-cols-4 {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      ) !important;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      ) !important;
+  }
+
+
+  /* -------------------------------------------------------
+     CHART CONTAINERS
+  ------------------------------------------------------- */
+
+  .recharts-responsive-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   767px AND BELOW
+========================================================= */
+
+@media (max-width: 767px) {
+
+  /* -------------------------------------------------------
+     MOBILE TOP SPACE
+  ------------------------------------------------------- */
+
+  main {
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    max-width: 100% !important;
+
+    margin-left: 0 !important;
+
+    padding-top: 80px !important;
+
+    overflow-x: hidden;
+  }
+
+
+  /* -------------------------------------------------------
+     PAGE PADDING
+  ------------------------------------------------------- */
+
+  main.p-8 {
+    padding:
+      80px 16px 24px !important;
+  }
+
+  main.px-8 {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+
+  /* -------------------------------------------------------
+     ALL COMMON GRIDS
+  ------------------------------------------------------- */
+
+  .grid-cols-4,
+  .grid-cols-3,
+  .grid-cols-2 {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+
+  /* -------------------------------------------------------
+     GRID SPANS
+  ------------------------------------------------------- */
+
+  .col-span-2,
+  .col-span-3,
+  .col-span-4 {
+    grid-column:
+      span 1 / span 1 !important;
+  }
+
+
+  /* -------------------------------------------------------
+     FLEX WRAP
+  ------------------------------------------------------- */
+
+  .flex.gap-3,
+  .flex.gap-4 {
+    flex-wrap: wrap;
+  }
+
+
+  /* -------------------------------------------------------
+     HEADINGS
+  ------------------------------------------------------- */
+
+  main h1 {
+    max-width: 100%;
+
+    font-size:
+      1.5rem !important;
+
+    line-height:
+      2rem !important;
+  }
+
+  .text-3xl {
+    font-size:
+      1.65rem !important;
+
+    line-height:
+      2rem !important;
+  }
+
+  .text-2xl {
+    font-size:
+      1.45rem !important;
+
+    line-height:
+      1.9rem !important;
+  }
+
+
+  /* -------------------------------------------------------
+     LARGE PADDING
+  ------------------------------------------------------- */
+
+  .p-8 {
+    padding:
+      16px !important;
+  }
+
+  .p-6 {
+    padding:
+      16px !important;
+  }
+
+
+  /* -------------------------------------------------------
+     CARDS
+  ------------------------------------------------------- */
+
+  .rounded-xl,
+  .rounded-2xl {
+    max-width: 100%;
+  }
+
+
+  /* -------------------------------------------------------
+     INPUTS
+  ------------------------------------------------------- */
+
+  input,
+  textarea,
+  select {
+    width: 100%;
+
+    min-width: 0;
+
+    max-width: 100%;
+  }
+
+
+  /* -------------------------------------------------------
+     TABLES
+  ------------------------------------------------------- */
+
+  .overflow-x-auto,
+  .table-responsive {
+    width: 100%;
+
+    max-width: 100%;
+
+    overflow-x: auto;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+
+  main table {
+    width: 100%;
+
+    min-width: 620px;
+  }
+
+
+  /* -------------------------------------------------------
+     CHARTS
+  ------------------------------------------------------- */
+
+  .recharts-responsive-container {
+    width: 100% !important;
+
+    max-width: 100% !important;
+  }
+
+
+  /* -------------------------------------------------------
+     BUTTONS
+  ------------------------------------------------------- */
+
+  button {
+    max-width: 100%;
+  }
+
+}
+
+
+/* =========================================================
+   VERY SMALL MOBILE
+   480px AND BELOW
+========================================================= */
+
+@media (max-width: 480px) {
+
+  .sentrix-mobile-bar {
+    height: 60px;
+
+    padding:
+      0 12px;
+  }
+
+
+  .sentrix-mobile-menu-button {
+    width: 38px;
+    height: 38px;
+  }
+
+
+  .sentrix-mobile-logo {
+    width: 29px;
+    height: 29px;
+  }
+
+
+  main {
+    padding-top:
+      76px !important;
+  }
+
+
+  main.p-8 {
+    padding:
+      76px 12px 20px !important;
+  }
+
+
+  main.px-8 {
+    padding-left:
+      12px !important;
+
+    padding-right:
+      12px !important;
+  }
+
+
+  main h1 {
+    font-size:
+      1.35rem !important;
+
+    line-height:
+      1.8rem !important;
+  }
+
+}
