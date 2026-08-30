@@ -15,17 +15,15 @@ import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
 import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 
 /*
 |--------------------------------------------------------------------------
-| PDF.js Worker
+| PDF.js Worker Setup
 |--------------------------------------------------------------------------
 */
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  pdfjsWorker;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 
 /*
