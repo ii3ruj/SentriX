@@ -454,6 +454,26 @@ export default function NewIncident() {
 
   /*
   |--------------------------------------------------------------------------
+  | Handle Template Download
+  |--------------------------------------------------------------------------
+  */
+
+  const handleDownloadTemplate = () => {
+    const templateContent = `SentriX Official Incident Report Template\n\nRequired 37 Network Flow Features:\n- ${REQUIRED_FEATURES.join("\n- ")}`;
+    const blob = new Blob([templateContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "SentriX_Incident_Template.txt";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+
+  /*
+  |--------------------------------------------------------------------------
   | Handle File Upload
   |--------------------------------------------------------------------------
   */
@@ -961,9 +981,9 @@ export default function NewIncident() {
                 </div>
 
                 {/* TEMPLATE DOWNLOAD BUTTON */}
-                <a
-                  href="/path-to-your-template/sentrix-incident-template.pdf" 
-                  download="SentriX_Incident_Report_Template.pdf"
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
                   className="
                     inline-flex
                     items-center
@@ -987,7 +1007,7 @@ export default function NewIncident() {
                 >
                   <Download size={15} className="text-emerald-400" />
                   Download Report Template
-                </a>
+                </button>
 
               </div>
 
