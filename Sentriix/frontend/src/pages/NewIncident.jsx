@@ -16,8 +16,6 @@ import Sidebar from "../components/Sidebar";
 import { apiService } from "../services/api";
 
 import * as pdfjsLib from "pdfjs-dist";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 
 /*
@@ -461,135 +459,43 @@ export default function NewIncident() {
   */
 
   const handleDownloadTemplate = () => {
-    const BABY_BLUE = [137, 207, 240]; // #89CFF0
-    const BABY_BLUE_DARK = [70, 140, 190]; // header shade
-    const LIGHT_ROW = [235, 246, 252];
-    const GREY_TEXT = [120, 120, 120];
+    const templateContent = `==================================================
+SentriX Official Incident Report Template
+==================================================
 
-    const doc = new jsPDF({ unit: "pt", format: "letter" });
-    const marginX = 42;
-    let cursorY = 50;
+[1. Incident Information]
+Incident Type: 
+Source: 
+Description: 
 
-    // ===== Title =====
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(20, 20, 20);
-    doc.text("SentriX — Incident Report Template", marginX, cursorY);
-    cursorY += 16;
+[2. Network Information]
+Protocol: 
+Source IP: 
+Destination IP: 
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...GREY_TEXT);
-    const introLines = doc.splitTextToSize(
-      "Fill in the values below and upload this file on the New Incident page. Keep the field names exactly as they appear — the analysis engine matches them by name. The AI Network Features section is required for machine-learning scoring; if any of the 37 values is missing, the incident is scored from organizational context only.",
-      530
-    );
-    doc.text(introLines, marginX, cursorY);
-    cursorY += introLines.length * 10 + 10;
+[3. Asset Information]
+Asset Type: 
+Asset Criticality: 
+Exposure: 
+Vulnerability: 
+Business Impact: 
 
-    // ===== Helper: section title =====
-    const sectionTitle = (text) => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(...BABY_BLUE_DARK);
-      doc.text(text, marginX, cursorY);
-      cursorY += 8;
-    };
+[4. AI Network Features — Required 37 Values]
+${REQUIRED_FEATURES.map((f) => `${f}: `).join("\n")}
 
-    // ===== Helper: key/value blank table =====
-    const kvTable = (rows) => {
-      autoTable(doc, {
-        startY: cursorY,
-        margin: { left: marginX, right: marginX },
-        body: rows.map((label) => [label, ""]),
-        styles: {
-          fontSize: 9,
-          cellPadding: 6,
-          lineColor: [200, 220, 235],
-          lineWidth: 0.5,
-          minCellHeight: 20,
-        },
-        columnStyles: {
-          0: { cellWidth: 170, fontStyle: "bold", fillColor: LIGHT_ROW },
-          1: { cellWidth: "auto" },
-        },
-        theme: "grid",
-      });
-      cursorY = doc.lastAutoTable.finalY + 18;
-    };
+==================================================
+Instructions: Fill in the values and upload this report on the New Incident page. Do not rename or reorder the fields.
+==================================================`;
 
-    // ===== 1. Incident Information =====
-    sectionTitle("1. Incident Information");
-    kvTable(["Incident Type", "Source", "Description"]);
-
-    // ===== 2. Network Information =====
-    sectionTitle("2. Network Information");
-    kvTable(["Protocol", "Source IP", "Destination IP"]);
-
-    // ===== 3. Asset Information =====
-    sectionTitle("3. Asset Information");
-    kvTable([
-      "Asset Type",
-      "Asset Criticality",
-      "Exposure",
-      "Vulnerability",
-      "Business Impact",
-    ]);
-
-    // Page break before the big feature table if space is tight
-    if (cursorY > 620) {
-      doc.addPage();
-      cursorY = 50;
-    }
-
-    // ===== 4. AI Network Features =====
-    sectionTitle("4. AI Network Features — all 37 values required");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...GREY_TEXT);
-    doc.text(
-      "Values are standardized (StandardScaler) exactly as the model was trained.",
-      marginX,
-      cursorY
-    );
-    cursorY += 10;
-
-    autoTable(doc, {
-      startY: cursorY,
-      margin: { left: marginX, right: marginX },
-      head: [["Feature", "Value"]],
-      body: REQUIRED_FEATURES.map((f) => [f, ""]),
-      styles: {
-        fontSize: 8.3,
-        cellPadding: 4,
-        lineColor: [200, 220, 235],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: BABY_BLUE,
-        textColor: [10, 40, 60],
-        fontStyle: "bold",
-      },
-      alternateRowStyles: { fillColor: LIGHT_ROW },
-      columnStyles: {
-        0: { cellWidth: 260 },
-        1: { cellWidth: "auto" },
-      },
-      theme: "grid",
-      didDrawPage: () => {
-        // Footer on every page
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-        doc.setTextColor(...GREY_TEXT);
-        doc.text(
-          "SentriX — AI-Powered Threat Investigation & Incident Response Platform. Do not rename or reorder the fields.",
-          marginX,
-          doc.internal.pageSize.getHeight() - 25
-        );
-      },
-    });
-
-    doc.save("SentriX_Incident_Template.pdf");
+    const blob = new Blob([templateContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "SentriX_Incident_Template.txt";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
 
