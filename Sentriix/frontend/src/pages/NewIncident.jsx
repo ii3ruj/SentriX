@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Loader2,
   ShieldAlert,
+  Download,
 } from "lucide-react";
 
 import { Link, useNavigate } from "react-router-dom";
@@ -914,43 +915,79 @@ export default function NewIncident() {
                 className="
                   mb-6
                   sm:mb-8
+                  flex
+                  flex-col
+                  sm:flex-row
+                  sm:items-center
+                  sm:justify-between
+                  gap-4
                 "
               >
+                <div>
+                  <h1
+                    className="
+                      text-2xl
+                      sm:text-3xl
+                      font-bold
+                      mb-2
+                    "
+                  >
+                    Incident Intake Form
+                  </h1>
 
-                <h1
+
+                  <p
+                    className="
+                      text-sm
+                      text-gray-400
+                      leading-relaxed
+                    "
+                  >
+                    Upload an authorized incident report PDF for format verification, automated extraction, and AI analysis.
+                  </p>
+
+
+                  <p
+                    className="
+                      text-xs
+                      text-gray-600
+                      mt-2
+                      break-all
+                    "
+                  >
+                    Logged by:{" "}
+                    {currentAnalyst}
+                  </p>
+                </div>
+
+                {/* TEMPLATE DOWNLOAD BUTTON */}
+                <a
+                  href="/path-to-your-template/sentrix-incident-template.pdf" 
+                  download="SentriX_Incident_Report_Template.pdf"
                   className="
-                    text-2xl
-                    sm:text-3xl
-                    font-bold
-                    mb-2
-                  "
-                >
-                  Incident Intake Form
-                </h1>
-
-
-                <p
-                  className="
-                    text-sm
-                    text-gray-400
-                    leading-relaxed
-                  "
-                >
-                  Upload an authorized incident report PDF for format verification, automated extraction, and AI analysis.
-                </p>
-
-
-                <p
-                  className="
+                    inline-flex
+                    items-center
+                    gap-2
+                    bg-white/5
+                    border
+                    border-white/10
+                    hover:border-emerald-500/40
+                    hover:bg-emerald-500/10
+                    text-gray-200
+                    hover:text-emerald-300
                     text-xs
-                    text-gray-600
-                    mt-2
-                    break-all
+                    font-semibold
+                    px-4
+                    py-2.5
+                    rounded-xl
+                    transition
+                    shrink-0
+                    w-fit
                   "
                 >
-                  Logged by:{" "}
-                  {currentAnalyst}
-                </p>
+                  <Download size={15} className="text-emerald-400" />
+                  Download Report Template
+                </a>
 
               </div>
 
